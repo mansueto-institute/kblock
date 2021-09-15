@@ -22,15 +22,14 @@ def build_data_dir(root: str, permission_override: bool, additional: Optional[Se
         ['blocks', 'buildings', 'cache', 'complexity', 'errors', 'gadm', 'geofabrik', 'geojson', 'geojson_gadm', 'input', 'lines', 'logs', 'parcels'] + 
         (additional if additional else [])
     }
-    print(permission_override)
     if permission_override:
         data_paths["root"] = root
         for dir_path in data_paths.values():
             dir_path.mkdir(parents=True, exist_ok=True)
     else:
-        info('Downloading will create the following repositories if they do not already exist:')
+        print('Downloading will create the following repositories if they do not already exist:')
         for dir_path in data_paths.values():
-            info(f'{dir_path.resolve()}')
+            print(f'{dir_path.resolve()}')
         user_response = input('Do you wish to proceed with download to the specified folder? Please enter "y" or "n"\n')
         while user_response.lower() not in ['y', 'n']:
             user_response = input('Please enter "y" or "n"\n')
@@ -39,7 +38,7 @@ def build_data_dir(root: str, permission_override: bool, additional: Optional[Se
             for dir_path in data_paths.values():
                 dir_path.mkdir(parents=True, exist_ok=True)
         else:
-            info('Download will not proceed and folders will not be created.')
+            print('Download will not proceed and folders will not be created.')
             exit()
     return data_paths
 
@@ -83,17 +82,17 @@ def get_gadm_data(data_root: str,
         outpath = data_paths['gadm']/country_code
 
         if overwrite or not outpath.is_dir():
-            info("Downloading GADM file for %s", country_name)
+            print(f"Downloading GADM file for {country_name}")
             filepath = gadm_filename(country_code)
             try: 
                 download_helper(GADM_URL/filepath, data_paths["zipfiles"]/filepath, verbose) 
                 with ZipFile(data_paths["zipfiles"]/filepath) as z:
                     z.extractall(outpath)
             except Exception as e:
-                error("Error downloading and extracting shapefile for %s: %s", country_name, e)
+                print(f"Error downloading and extracting shapefile for {country_name}: {e}")
 
         else:
-            info("GADM file for %s exists and overwrite set to False; skipping", country_name)
+            print(f"GADM file for {country_name} exists and overwrite set to False; skipping")
 
 def get_geofabrik_data(data_root: str, 
                        country_regions: Dict[str, str], 
@@ -109,13 +108,13 @@ def get_geofabrik_data(data_root: str,
     for (name, region) in country_regions.items():  
         outpath = data_paths["geofabrik"]/f"{name}-latest.osm.pbf"
         if overwrite or not outpath.exists():
-            info("Downloading Geofabrik file for %s/%s", region, name)
+            print(f"Downloading Geofabrik file for {region}/{name}")
             try: 
                 download_helper(GEOFABRIK_URL/geofabrik_filename(region, name), outpath, verbose)
             except Exception as e:
-                error("Error downloading PBF for %s/%s: %s", region, name, e)
+                error(f"Error downloading PBF for {region}/{name}: {e}")
         else:
-            info("Geofabrik file for %s/%s exists and overwrite set to False; skipping", region, name)
+            print(f"Geofabrik file for {region}/{name} exists and overwrite set to False; skipping")
 
 
 def download(data_source: str, 
