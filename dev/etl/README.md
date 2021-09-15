@@ -10,7 +10,7 @@ A CSV that translates between country codes and geofabrik and gadm names so as t
 
 ## download.py
 
-Contains functions that download GADM and geofabrik data. The main one, and the only one you should ever need to call, is called download. You can import it using '''from kblock.dev.etl.download import download'''. We can also add download to the __init__.py files in order to make it available from a higher level. 
+Contains functions that download GADM and geofabrik data. The main one, and the only one you should ever need to call, is called download. You can import it using ```from kblock.dev.etl.download import download```. We can also add download to the __init__.py files in order to make it available from a higher level. 
 
 ### download
 
