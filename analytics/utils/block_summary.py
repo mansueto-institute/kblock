@@ -126,9 +126,9 @@ def make_summary(bg_path: Union[str, Path],
     and boundary lines. 
     """
     # (1) Allocate Landscan
-    if not isinstance(block_group_path, Path):
-        block_group_path = Path(block_group_path)
-    if block_group_path.suffix == '.csv':
+    if not isinstance(bg_path, Path):
+        bg_path = Path(bg_path)
+    if bg_path.suffix == '.csv':
         bg_blocks = utils.load_csv_to_geo(aoi_path)
     else:
         bg_blocks = gpd.read_file(str(aoi_path))
