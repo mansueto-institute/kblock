@@ -40,12 +40,10 @@ def load_raster_selection(raster_io: rasterio.io.DatasetReader,
         huge tiff's
     '''
 
-    if not isinstance(geom_list, List):
+    if not isinstance(geom_list, gpd.GeoSeries):
         geom_list = [geom_list]
 
     # Find the window around the geom_list
-    print(type(geom_list))
-    print(type(geom_list[0]))
     geom = [geom_list.unary_union]
     window = rasterio.features.geometry_window(raster_io, geom)
     # window = rasterio.features.geometry_window(raster_io, geom_list)

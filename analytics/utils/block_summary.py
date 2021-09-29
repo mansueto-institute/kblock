@@ -56,7 +56,7 @@ def make_summary(superblock_path: Union[str, Path],
     superblock_buildings = gpd.read_file(buildings_path)
 
     ### fiona error ###
-    if superblock_bldgs is None:
+    if superblock_buildings is None:
         summary_out_path = Path(summary_out_path)
         fname = summary_out_path.stem
         outdir = summary_out_path.parent
@@ -73,7 +73,7 @@ def make_summary(superblock_path: Union[str, Path],
         return None
     ### --- ###
 
-    bldg_pop_alloc = allocate_population(superblock_bldgs, superblock_ls, 'pop')
+    bldg_pop_alloc = allocate_population(superblock_buildings, superblock_ls, 'pop')
 
     # (2) Now assemble the other data
     if not pop_only:
@@ -91,7 +91,7 @@ def make_summary(superblock_path: Union[str, Path],
     superblock_summary.to_file(str(summary_out_path), driver='GeoJSON')
     print("Saved to: {}".format(str(summary_out_path)))
     
-    superblock_bldgs_out_path = outdir / (fname + "-bldgs.geojson")
+    superblock_buildings_out_path = outdir / (fname + "-bldgs.geojson")
     superblock_bldg_summary.to_file(str(block_bldgs_out_path), driver='GeoJSON')
     print("Saved to: {}".format(str(superblock_bldg_summary)))
 
