@@ -115,7 +115,7 @@ def get_geoms_intersecting_aoi(aoi_gdf: gpd.GeoDataFrame,
     return aoi_selection
 
 
-def make_summary(block_group_path: Union[str, Path],
+def make_summary(bg_path: Union[str, Path],
                  landscan_path: Union[str, Path],
                  buildings_dir: Union[str, Path],
                  summary_out_path: Union[str, Path],
