@@ -118,11 +118,9 @@ def get_geoms_intersecting_aoi(aoi_gdf: gpd.GeoDataFrame,
 def make_summary(block_group_path: Union[str, Path],
                  landscan_path: Union[str, Path],
                  buildings_dir: Union[str, Path],
-                 blocks_dir: Union[str, Path],
-                 gadm_dir: Union[str, Path],
                  summary_out_path: Union[str, Path],
-                 pop_only: bool = True
-                 ) -> None:
+                 pop_only: bool
+                 ) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """
     Creates a summary of the given area using its population, blocks,
     and boundary lines. 
@@ -131,18 +129,12 @@ def make_summary(block_group_path: Union[str, Path],
     if not isinstance(block_group_path, Path):
         block_group_path = Path(block_group_path)
     if block_group_path.suffix == '.csv':
-        bg_gdf = utils.load_csv_to_geo(aoi_path)
+        bg_blocks = utils.load_csv_to_geo(aoi_path)
     else:
-        bg_gdf = gpd.read_file(str(aoi_path))
-    gadm_list = get_gadm_list(bg_gdf, gadm_dir)
-    print("GADM list: {}".format(gadm_list))
+        bg_blocks = gpd.read_file(str(aoi_path))
 
-    bg_blocks = get_geoms_intersecting_aoi(bg_gdf, blocks_dir, gadm_list)
-    if 'block_id' not in bg_blocks.columns:
-        bg_blocks['block_id'] = bg_blocks.index.tolist()
-    print(bg_blocks)
-
-    _, bg_ls = extract_aoi_data_from_raster(bg_gdf, landscan_path, save_geojson=False, save_tif=False)
+    gadm_list = list(set(bg_blocks['gadm_code']))
+    _, bg_ls = extract_aoi_data_from_raster(bg_blocks, landscan_path, save_geojson=False, save_tif=False)
     bg_ls_bldgs = get_geoms_intersecting_bg(bg_ls, buildings_dir, gadm_list)
 
     ### fiona error ###
@@ -166,7 +158,6 @@ def make_summary(block_group_path: Union[str, Path],
     bldg_pop_alloc = allocate_population(bg_ls_bldgs, bg_ls, 'pop')
 
     # (2) Now assemble the other data
-    # Temporarily not used
     if not pop_only:
         bg_bldg_summary = block_stats.make_bg_summary(bldg_pop_alloc, bg_blocks)
         block_cols = [x for x in bg_bldg_summary.columns if "block" in x]
@@ -192,13 +183,11 @@ def make_summary(block_group_path: Union[str, Path],
 if __name__ == "__main__":
     t0 = time.time()
     parser = argparse.ArgumentParser(description='Make block-level and building-level summary for Area of Interest')
-    parser.add_argument('--aoi_path', required=True, type=str, help='Path to geometry which defines AoI')
+    parser.add_argument('--bg_path', required=True, type=str, help='Path to geometry which defines AoI')
     parser.add_argument('--landscan_path', required=True, type=str, help='Path to Landscan tif file')
     parser.add_argument('--buildings_dir', required=True, type=str, help='Dir to buildings geomtries')
-    parser.add_argument('--blocks_dir', required=True, type=str, help='Dir to blocks geometries')
-    parser.add_argument('--gadm_dir', required=True, type=str, help='Dir to GAMD geometries')
     parser.add_argument('--summary_out_path', required=True, type=str, help='Path to save block summary')
-
+    parser.add_argument('--pop_only', required=False, type=bool, action='store_true', help='Should only the population be computed, not the analytics?')
     args = parser.parse_args()
     make_summary(**vars(args))
     t1 = time.time()
