@@ -5,7 +5,6 @@ from shapely.wkt import loads
 from shapely.geometry import Polygon, MultiPolygon
 from typing import Tuple, Union, Optional
 from pathlib import Path 
-from momepy import Rectangularity, BuildingAdjacency, Gini
 import utils
 import libpysal
 from libpysal.weights import W
@@ -177,62 +176,6 @@ def add_block_pop_density(bldg_pop: gpd.GeoDataFrame,
     return bldg_pop  
 
 
-def add_block_gini(bldg_pop: gpd.GeoDataFrame,
-                   values_col: str,
-                   weights: Optional[libpysal.weights.weights.W] = None
-                   ) -> gpd.GeoDataFrame:
-    """
-    Calculates the gini coefficient for the passed in values_col based on the passed in gpd.GeoDataFrame.
-    """
-    if values_col not in bldg_pop.columns:
-        raise IndexError(f'{values_col} was not found in bldg_pop')
-
-    if weights is None:
-        weights_dict = {bldg_pop.loc[index_val]['bldg_id']: bldg_pop[bldg_pop['block_id'] == bldg_pop.loc[index_val]['block_id']]['bldg_id'].tolist() for index_val in bldg_pop.index.tolist()}
-        weights = W(weights_dict, ids=bldg_pop['bldg_id'].tolist())
-
-    bldg_pop['gini_'+values_col] = Gini(bldg_pop, values=values_col, spatial_weights=weights, unique_id='bldg_id').series
-
-    return bldg_pop
-
-
-def add_block_rectangularity(bldg_pop: gpd.GeoDataFrame,
-                             block: gpd.GeoDataFrame,
-                             ) -> gpd.GeoDataFrame:
-    """
-    Adds rectangularity for each block in the data frame and adds that to the bldg_pop geodf.
-    Calculated as (area)/(minimum bounding rotated rectangle area)
-    See: http://docs.momepy.org/en/stable/generated/momepy.Rectangularity.html#momepy.Rectangularity
-    """
-    if 'block_area' not in bldg_pop.columns:
-        bldg_pop = add_block_area(bldg_pop, block)
-
-    bldg_pop['rectangularity'] = Rectangularity(bldg_pop, areas='block_area').series
-
-    return bldg_pop
-
-
-def add_building_adjacency(bldg_pop: gpd.GeoDataFrame, 
-                           weights: Optional[libpysal.weights.weights.W] = None
-                           ) -> gpd.GeoDataFrame:
-    """
-    Calculates the building agency, roughly a ratio of number of buildings to number of "built-up patches".
-    The "spatial_weights_higher" is created by defining every building in the same block to be connected to one another.
-
-    The intention is to figure out whether the block is composed of adjoining buildings or whether it's primarily freestanding
-    buildings. 
-    Defined here: https://www-sciencedirect-com.proxy.uchicago.edu/science/article/pii/S0169204617301275?via%3Dihub
-    Documentation here: http://docs.momepy.org/en/stable/generated/momepy.BuildingAdjacency.html#momepy.BuildingAdjacency
-    """
-    if weights is None:
-        weights_dict = {bldg_pop.loc[index_val]['bldg_id']: bldg_pop[bldg_pop['block_id'] == bldg_pop.loc[index_val]['block_id']]['bldg_id'].tolist() for index_val in bldg_pop.index.tolist()}
-        weights = W(weights_dict, ids=bldg_pop['bldg_id'].tolist())
-
-    bldg_pop['building_adjacency'] = BuildingAdjacency(bldg_pop, spatial_weights_higher=weights, unique_id='bldg_id').series
-
-    return bldg_pop
-
-
 ######################################
 # COMMANDS FOR GENERAL AOI SUMMARIES #
 ######################################
@@ -254,8 +197,6 @@ def make_aoi_summary(bldg_pop_data: Union[str, gpd.GeoDataFrame],
     block = flex_load(block_data)
     if 'block_id' not in bldg_pop.columns:
         bldg_pop = add_block_id(bldg_pop, block)
-    # bldg_pop = add_block_gini(bldg_pop, 'bldg_pop')
-    # bldg_pop = add_building_adjacency(bldg_pop)
     bldg_pop = add_block_area(bldg_pop, block)
     bldg_pop = add_block_rectangularity(bldg_pop, block)
     bldg_pop = add_block_bldg_count(bldg_pop)

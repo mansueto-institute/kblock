@@ -187,7 +187,7 @@ if __name__ == "__main__":
     parser.add_argument('--landscan_path', required=True, type=str, help='Path to Landscan tif file')
     parser.add_argument('--buildings_dir', required=True, type=str, help='Dir to buildings geomtries')
     parser.add_argument('--summary_out_path', required=True, type=str, help='Path to save block summary')
-    parser.add_argument('--pop_only', required=False, type=bool, action='store_true', help='Should only the population be computed, not the analytics?')
+    parser.add_argument('--pop_only', required=False, default=False, action='store_true', help='Should only the population be computed, not the analytics?')
     args = parser.parse_args()
     make_summary(**vars(args))
     t1 = time.time()
