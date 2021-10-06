@@ -89,13 +89,7 @@ def add_block_bldg_area_density(bldg_pop: gpd.GeoDataFrame,
     """
     Calculates the ratio of building density to block area and adds that to the bldg_pop geodf
     """
-    if 'block_bldg_area' not in bldg_pop.columns:
-        bldg_pop = add_block_bldg_area(bldg_pop, block)
-
-    if 'block_area' not in bldg_pop.columns:
-        bldg_pop = add_block_area(bldg_pop, block)
-
-    bldg_pop['block_bldg_area_density'] = bldg_pop['block_bldg_area'] / bldg_pop['block_area']
+    bldg_pop['block_bldg_area_density'] = bldg_pop['building_area'] / bldg_pop['block_area']
     return bldg_pop
 
 
@@ -112,7 +106,7 @@ def add_block_bldg_count_density(bldg_pop: gpd.GeoDataFrame,
     if 'block_area' not in bldg_pop.columns:
         bldg_pop = add_block_area(bldg_pop, block) 
 
-    bldg_pop['block_bldg_count_density'] = bldg_pop['block_bldg_count'] / bldg_pop['block_area']
+    bldg_pop['block_building_count_density'] = bldg_pop['building_count'] / bldg_pop['block_area']
     return bldg_pop
 
 
@@ -146,10 +140,10 @@ def add_block_pop_density(bldg_pop: gpd.GeoDataFrame,
 ######################################
 # COMMANDS FOR GENERAL AOI SUMMARIES #
 ######################################
-def make_aoi_summary(bldg_pop_data: Union[str, gpd.GeoDataFrame], 
-                     block_data: Union[str, gpd.GeoDataFrame],
-                     aoi_out_path: str = None,
-                     ) -> None:
+def make_superblock_summary(bldg_pop_data: Union[str, gpd.GeoDataFrame], 
+                            block_data: Union[str, gpd.GeoDataFrame],
+                            aoi_out_path: str = None,
+                            ) -> None:
     '''
     Calculates all statistics given:
         1. bldg-level pop allocation
