@@ -70,14 +70,16 @@ def add_block_id(bldg_pop: gpd.GeoDataFrame,
 # BASIC BLOCK-LEVEL STATISTICS TO ADD #
 #######################################
 
-def add_block_info(bldg_pop: gpd.GeoDataFrame,
-                   block: gpd.GeoDataFrame,
-                   ) -> gpd.GeoDataFrame:
+def set_dtypes(bldg_pop: gpd.GeoDataFrame,
+               block: gpd.GeoDataFrame,
+              ) -> gpd.GeoDataFrame:
     """
-    Adds block_area, building_count, building_area to the bldg_pop geodf
+    Mandate dtypes for each col
     """    
-    bldg_pop = bldg_pop.merge(block[['block_id', 'block_area', 'building_count', 'building_area']],
-                              how='left', on='block_id')
+    dtypes = {'block_id': str, 'block_area': float, 'building_count': int, 'building_area': float}
+
+    for col in dtypes.keys():
+        bldg_pop[col] = bldg_pop[col].apply(lambda x: dtypes[col](x))
     return bldg_pop
 
 
@@ -143,7 +145,7 @@ def make_superblock_summary(bldg_pop_data: gpd.GeoDataFrame,
         bldg_pop = load_bldg_pop(bldg_pop_data)
 
     if 'block_id' not in bldg_pop.columns:
-         bldg_pop = add_block_id(bldg_pop, block)
+         bldg_pop = add_block_id(bldg_pop, block_data)
     bldg_pop = add_block_info(bldg_pop, block_data)
     bldg_pop = add_block_bldg_area_density(bldg_pop, block_data)
     bldg_pop = add_block_bldg_count_density(bldg_pop, block_data)
