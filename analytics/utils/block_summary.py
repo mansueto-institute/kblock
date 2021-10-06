@@ -72,7 +72,6 @@ def make_summary(superblock_path: Union[str, Path],
 
         return None
     ### --- ###
-
     bldg_pop_alloc = allocate_population(superblock_buildings, superblock_ls, 'pop')
 
     # (2) Now assemble the other data
