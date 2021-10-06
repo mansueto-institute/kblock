@@ -49,6 +49,22 @@ def load_bldg_pop(bldg_pop_path: str,
     assert pop_variable in bldg_pop.columns, "ERROR - loading the building level pop file but looking for pop column |{}| which is not in file {}".format(pop_variable, bldg_pop_path)
     return bldg_pop
 
+def add_block_id(bldg_pop: gpd.GeoDataFrame,
+                 block: Union[gpd.GeoDataFrame, str],
+                 ) -> gpd.GeoDataFrame:
+    """
+    add_block_id()
+    Step 2: some bldg files don't have the block_id so that may need 
+    to be joined on
+    NOTE: block can be a path to the block GeoDataFrame, or the already loaded GeoDataFrame
+    Joins block_id column on to the builing geodf.
+    """
+    block = flex_load(block)
+    bldg_pop = utils.join_block_building(block, bldg_pop)
+    if 'index_right' in bldg_pop.columns:
+        bldg_pop.drop(columns=['index_right'], inplace=True)
+    return bldg_pop
+
 
 #######################################
 # BASIC BLOCK-LEVEL STATISTICS TO ADD #
@@ -125,6 +141,9 @@ def make_superblock_summary(bldg_pop_data: gpd.GeoDataFrame,
         bldg_pop = bldg_pop_data
     else:
         bldg_pop = load_bldg_pop(bldg_pop_data)
+
+    if 'block_id' not in bldg_pop.columns:
+         bldg_pop = add_block_id(bldg_pop, block)
     bldg_pop = add_block_info(bldg_pop, block_data)
     bldg_pop = add_block_bldg_area_density(bldg_pop, block_data)
     bldg_pop = add_block_bldg_count_density(bldg_pop, block_data)
