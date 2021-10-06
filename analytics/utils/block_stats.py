@@ -6,8 +6,6 @@ from shapely.geometry import Polygon, MultiPolygon
 from typing import Tuple, Union, Optional
 from pathlib import Path 
 import utils
-import libpysal
-from libpysal.weights import W
 
 '''
 FILE DESCRIPTION:
@@ -52,68 +50,10 @@ def load_bldg_pop(bldg_pop_path: str,
     return bldg_pop
 
 
-def add_block_id(bldg_pop: gpd.GeoDataFrame,
-                 block: Union[gpd.GeoDataFrame, str],
-                 ) -> gpd.GeoDataFrame:
-    """
-    add_block_id()
-    Step 2: some bldg files don't have the block_id so that may need 
-    to be joined on
-    NOTE: block can be a path to the block GeoDataFrame, or the already loaded GeoDataFrame
-    Joins block_id column on to the builing geodf.
-    """
-    block = flex_load(block)
-    bldg_pop = utils.join_block_building(block, bldg_pop)
-    if 'index_right' in bldg_pop.columns:
-        bldg_pop.drop(columns=['index_right'], inplace=True)
-    return bldg_pop
-
 
 #######################################
 # BASIC BLOCK-LEVEL STATISTICS TO ADD #
 #######################################
-
-def add_block_area(bldg_pop: gpd.GeoDataFrame,
-                   block: gpd.GeoDataFrame,
-                   ) -> gpd.GeoDataFrame:
-    """
-    Calculates the area of each block and adds that to the bldg_pop geodf
-    """    
-    block = block.to_crs("EPSG:3395")
-    block['block_area'] = block.area * 1e-6
-    block = block.to_crs("EPSG:4326")
-
-    bldg_pop = bldg_pop.merge(block[['block_id', 'block_area']],
-                              how='left', on='block_id')
-    return bldg_pop
-
-
-def add_block_bldg_count(bldg_pop: gpd.GeoDataFrame
-                         ) -> gpd.GeoDataFrame:
-    """
-    Calculates the number of buildings in a block and adds that to the bldg_pop geodf
-    """
-    counts = bldg_pop[['block_id', 'bldg_id']].groupby('block_id').count().reset_index()
-    counts.rename(columns={'bldg_id': 'block_bldg_count'}, inplace=True)
-    bldg_pop = bldg_pop.merge(counts, how='left', on='block_id')
-    return bldg_pop
-
-
-def add_block_bldg_area(bldg_pop: gpd.GeoDataFrame,
-                        block: gpd.GeoDataFrame,
-                        ) -> gpd.GeoDataFrame:
-    """
-    Calculates the number of buildings in a block and adds that to the bldg_pop geodf
-    """
-    bldg_pop = bldg_pop.to_crs("EPSG:3395")
-    bldg_pop['bldg_area'] = (bldg_pop.area * 1e-6)
-    block_bldg_area = bldg_pop[['block_id', 'bldg_area']].groupby('block_id').sum().reset_index()
-    block_bldg_area.rename(columns={'bldg_area': 'block_bldg_area'}, inplace=True)
-
-    bldg_pop = bldg_pop.merge(block_bldg_area, how='left', on='block_id')
-    bldg_pop = bldg_pop.to_crs("EPSG:4326")
-    bldg_pop.drop(columns=["bldg_area"], inplace=True)
-    return bldg_pop
 
 
 def add_block_bldg_area_density(bldg_pop: gpd.GeoDataFrame,
@@ -122,11 +62,6 @@ def add_block_bldg_area_density(bldg_pop: gpd.GeoDataFrame,
     """
     Calculates the ratio of building density to block area and adds that to the bldg_pop geodf
     """
-    if 'block_bldg_area' not in bldg_pop.columns:
-        bldg_pop = add_block_bldg_area(bldg_pop, block)
-
-    if 'block_area' not in bldg_pop.columns:
-        bldg_pop = add_block_area(bldg_pop, block)
 
     bldg_pop['block_bldg_area_density'] = bldg_pop['block_bldg_area'] / bldg_pop['block_area']
     return bldg_pop
@@ -141,9 +76,6 @@ def add_block_bldg_count_density(bldg_pop: gpd.GeoDataFrame,
     """
     if 'block_bldg_count' not in bldg_pop.columns:
         bldg_pop = add_block_bldg_count(bldg_pop, block)
-
-    if 'block_area' not in bldg_pop.columns:
-        bldg_pop = add_block_area(bldg_pop, block) 
 
     bldg_pop['block_bldg_count_density'] = bldg_pop['block_bldg_count'] / bldg_pop['block_area']
     return bldg_pop
@@ -166,9 +98,6 @@ def add_block_pop_density(bldg_pop: gpd.GeoDataFrame,
     """
     Calculates the ratio of block population to block area and adds that to the bldg_pop geodf
     """    
-    if 'block_area' not in bldg_pop.columns:
-        bldg_pop = add_block_area(bldg_pop, block)
-
     if 'block_pop' not in bldg_pop.columns:
         bldg_pop = add_block_pop(bldg_pop, block)
 
@@ -195,12 +124,7 @@ def make_aoi_summary(bldg_pop_data: Union[str, gpd.GeoDataFrame],
     else:
         bldg_pop = load_bldg_pop(bldg_pop_data)
     block = flex_load(block_data)
-    if 'block_id' not in bldg_pop.columns:
-        bldg_pop = add_block_id(bldg_pop, block)
-    bldg_pop = add_block_area(bldg_pop, block)
-    bldg_pop = add_block_rectangularity(bldg_pop, block)
     bldg_pop = add_block_bldg_count(bldg_pop)
-    bldg_pop = add_block_bldg_area(bldg_pop, block)
     bldg_pop = add_block_bldg_area_density(bldg_pop, block)
     bldg_pop = add_block_bldg_count_density(bldg_pop, block)
     bldg_pop = add_block_pop(bldg_pop)

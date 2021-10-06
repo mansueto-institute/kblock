@@ -80,7 +80,7 @@ def make_summary(superblock_path: Union[str, Path],
         superblock_bldg_summary = block_stats.make_superblock_summary(bldg_pop_alloc, superblock_blocks)
         block_cols = [x for x in superblock_bldg_summary.columns if "block" in x]
         superblock_stats = superblock_bldg_summary[block_cols].drop_duplicates()
-        superblock_summary = superblock_blocks.merge(superblock_block_stats, how='left', on='block_id')
+        superblock_summary = superblock_blocks.merge(superblock_stats, how='left', on='block_id')
 
     # (3) Save
     summary_out_path = Path(summary_out_path)
@@ -92,8 +92,8 @@ def make_summary(superblock_path: Union[str, Path],
     print("Saved to: {}".format(str(summary_out_path)))
     
     superblock_buildings_out_path = outdir / (fname + "-bldgs.geojson")
-    superblock_bldg_summary.to_file(str(block_bldgs_out_path), driver='GeoJSON')
-    print("Saved to: {}".format(str(superblock_bldg_summary)))
+    superblock_bldg_summary.to_file(str(superblock_buildings_out_path), driver='GeoJSON')
+    print("Saved to: {}".format(str(superblock_buildings_out_path)))
 
     return superblock_summary, superblock_bldg_summary
 
