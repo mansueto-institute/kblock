@@ -76,7 +76,7 @@ def set_dtypes(bldg_pop: gpd.GeoDataFrame,
     """
     Mandate dtypes for each col
     """    
-    dtypes = {'block_id': str, 'block_area': float, 'building_count': int, 'building_area': float}
+    dtypes = {'block_id': str, 'block_area': float, 'building_count': float, 'building_area': float}
 
     for col in dtypes.keys():
         bldg_pop[col] = bldg_pop[col].apply(lambda x: dtypes[col](x))
