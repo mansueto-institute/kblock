@@ -146,7 +146,7 @@ def make_superblock_summary(bldg_pop_data: gpd.GeoDataFrame,
 
     if 'block_id' not in bldg_pop.columns:
          bldg_pop = add_block_id(bldg_pop, block_data)
-    bldg_pop = add_block_info(bldg_pop, block_data)
+    bldg_pop = set_dtypes(bldg_pop, block_data)
     bldg_pop = add_block_bldg_area_density(bldg_pop, block_data)
     bldg_pop = add_block_bldg_count_density(bldg_pop, block_data)
     bldg_pop = add_block_pop(bldg_pop)
