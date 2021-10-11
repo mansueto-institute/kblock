@@ -155,7 +155,6 @@ def make_superblock_summary(bldg_pop_data: gpd.GeoDataFrame,
     bldg_pop = add_block_bldg_count_density(bldg_pop, block_data)
     bldg_pop = add_block_pop(bldg_pop)
     bldg_pop = add_block_pop_density(bldg_pop, block_data)
-    bldg_pop = utils.standardize_cols(block_data)
 
     if aoi_out_path is not None:
         aoi_out_path = Path(aoi_out_path)
