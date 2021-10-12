@@ -58,5 +58,5 @@ def load_csv_to_geo(csv_path: str,
 def remove_duplicated_cols_from_merge(block_data: gpd.GeoDataFrame):
     for col in block_data.columns.tolist():
         if col.endswith('_x'):
-            df[col.strip('_x')] = df[col]
-            df = df.drop([col, block.col.strip('_x') + '_y'], 1)
+            block_data[col.strip('_x')] = block_data[col]
+            block_data = block_data.drop([col, block_data.col.strip('_x') + '_y'], 1)
