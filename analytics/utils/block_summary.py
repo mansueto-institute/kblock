@@ -87,6 +87,7 @@ def make_summary(superblock_path: Union[str, Path],
     outdir = summary_out_path.parent
     outdir.mkdir(exist_ok=True, parents=True)
 
+    superblock_summary = utils.remove_duplicated_cols_from_merge(superblock_summary)
     superblock_summary.to_file(str(summary_out_path), driver='GeoJSON')
     print("Saved to: {}".format(str(summary_out_path)))
     

@@ -63,10 +63,6 @@ def add_block_id(bldg_pop: gpd.GeoDataFrame,
     bldg_pop = utils.join_block_building(block, bldg_pop)
     if 'index_right' in bldg_pop.columns:
         bldg_pop.drop(columns=['index_right'], inplace=True)
-    for col in block.columns.tolist():
-        if col.endswith('_x'):
-            df[col.strip('_x')] = df[col]
-            df = df.drop([col, df.col.strip('_x') + '_y'], 1)
     return bldg_pop
 
 
@@ -150,6 +146,7 @@ def make_superblock_summary(bldg_pop_data: gpd.GeoDataFrame,
 
     if 'block_id' not in bldg_pop.columns:
          bldg_pop = add_block_id(bldg_pop, block_data)
+    
     bldg_pop = set_dtypes(bldg_pop, block_data)
     bldg_pop = add_block_bldg_area_density(bldg_pop, block_data)
     bldg_pop = add_block_bldg_count_density(bldg_pop, block_data)
