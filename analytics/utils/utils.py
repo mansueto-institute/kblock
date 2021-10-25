@@ -59,3 +59,14 @@ def remove_duplicated_cols_from_merge(block_data: gpd.GeoDataFrame):
     block_data['block_area'] = block_data['block_area_x']
     block_data = block_data.drop(['block_area_x', 'block_area_y'], axis='columns')
     return block_data
+
+
+def parquet_write(block_data: gpd.GeoDataFrame,
+                  output_path: Path):
+    assert block_data.crs['init'] == 4326
+    block_data.to_parquet(output_path)
+
+
+def parquet_read(input_path: Union[str, Path]):
+    gdf = gpd.read_parquet(input_path)
+    return gdf
