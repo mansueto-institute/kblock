@@ -8,6 +8,7 @@ import argparse
 from pygeos import GEOSException
 import time
 import os
+import pyarrow
 
 #from . import utils, block_stats
 import utils
@@ -88,11 +89,14 @@ def make_summary(superblock_path: Union[str, Path],
     outdir.mkdir(exist_ok=True, parents=True)
 
     superblock_summary = utils.remove_duplicated_cols_from_merge(superblock_summary)
-    superblock_summary.to_file(str(summary_out_path), driver='GeoJSON')
+    superblock_buildings_out_path = outdir / (fname + "-bldgs" + summary_out_path.suffix)
+    if summary_out_path.suffix == '.geojson':
+        superblock_summary.to_file(str(summary_out_path), driver='GeoJSON')
+        superblock_bldg_summary.to_file(str(superblock_buildings_out_path), driver='GeoJSON')
+    elif summary_out_path.name.ends_with('parquet'):
+        superblock_summary.to_parquet(str(summary_out_path))
+        superblock_buildings_out_path.to_parquet(str(superblock_buildings_out_path))
     print("Saved to: {}".format(str(summary_out_path)))
-    
-    superblock_buildings_out_path = outdir / (fname + "-bldgs.geojson")
-    superblock_bldg_summary.to_file(str(superblock_buildings_out_path), driver='GeoJSON')
     print("Saved to: {}".format(str(superblock_buildings_out_path)))
 
     return superblock_summary, superblock_bldg_summary
