@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=kblock_summary
-#SBATCH --output=parallel_block_summary.out
-#SBATCH --error=parallel_block_summary.err
+#SBATCH --output=kblock_summary.out
+#SBATCH --error=kblock_summary.err
 #SBATCH --time=02:00:00
 #SBATCH --partition=broadwl
 #SBATCH --nodes=1
