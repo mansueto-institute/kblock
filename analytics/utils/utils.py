@@ -1,7 +1,7 @@
 import geopandas as gpd 
 import pandas as pd 
 from shapely.wkt import loads
-from typing import Tuple
+from typing import Tuple, Union
 from pathlib import Path
 
 '''

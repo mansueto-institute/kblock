@@ -66,7 +66,7 @@ def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
 
     # (2) Allocate Landscan
     gadm_list = list(set(superblock['gadm_code']))
-    _, superblock_ls = extract_aoi_data_from_raster(superblock, landscan_path, save_geojson=False, save_tif=False)
+    _, superblock_ls = extract_aoi_data_from_raster(superblock, str(landscan_path), save_geojson=False, save_tif=False)
 
     ### fiona error ###
     if superblock_buildings is None:
