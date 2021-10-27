@@ -8,4 +8,4 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=2000
 
-python utils/block_summary.py --superblock ../dev/data/kblock_freetown.geojson --landscan_path ../dev/data/ls_2019.tif --superblock_buildings /project2/bettencourt/mnp/analytics/data/buildings/SLE/buildings_SLE.4.2.1_1.geojson --summary_out_path SLE.4.2.1_1_summary.geojson
+python utils/block_summary.py --superblock ../dev/data/kblock_freetown.geojson --landscan_path /project2/bettencourt/mnp/analytics/data/population/ls_2019.tif --superblock_buildings /project2/bettencourt/mnp/analytics/data/buildings/SLE/buildings_SLE.4.2.1_1.geojson --summary_out_path SLE.4.2.1_1_summary.geojson

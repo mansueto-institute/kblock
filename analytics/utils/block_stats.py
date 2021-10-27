@@ -112,6 +112,7 @@ def add_block_pop(bldg_pop: gpd.GeoDataFrame,
     block_pop = bldg_pop[['block_id', 'bldg_pop']].groupby('block_id').sum()
     block_pop.rename(columns={'bldg_pop': 'block_pop'}, inplace=True)
     bldg_pop = bldg_pop.merge(block_pop, how='left', on='block_id')
+    bldg_pop['block_pop'] = bldg_pop['block_pop'].apply(lambda x: np.nan if x == 0 else x)
     return bldg_pop
 
 
@@ -148,7 +149,6 @@ def make_superblock_summary(bldg_pop_data: gpd.GeoDataFrame,
          bldg_pop = add_block_id(bldg_pop, block_data)
     
     bldg_pop = set_dtypes(bldg_pop, block_data)
-    bldg_pop['block_pop'] = bldg_pop['block_pop'].apply(lambda x: np.nan if x == 0 else x)
     bldg_pop = add_block_bldg_area_density(bldg_pop, block_data)
     bldg_pop = add_block_bldg_count_density(bldg_pop, block_data)
     bldg_pop = add_block_pop(bldg_pop)
