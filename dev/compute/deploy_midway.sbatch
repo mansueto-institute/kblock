@@ -14,9 +14,6 @@
 
 cd /project2/bettencourt/mnp/analytics/scripts/kblock/dev/compute/
 
-module load python/anaconda-2020.02
-source activate pygeos_env
-
 log_file_arg=/project2/bettencourt/mnp/analytics/deployments/log_output_sle.log
 country_code_arg=SLE
 country_code_file_arg=/project2/bettencourt/mnp/analytics/scripts/kblock/dev/compute/country_codes.csv
