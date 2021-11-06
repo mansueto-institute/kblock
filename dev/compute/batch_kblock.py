@@ -81,6 +81,7 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
 
     # OSM linestrings
     t0 = time.time()
+    logging.info(f"osm_file: {osm_file}")
     osm_gpd = gpd.read_file(osm_file).to_crs(epsg = 4326)
     #osm_pygeos = pygeos.from_shapely(osm_gpd['geometry'])
     osm_pygeos = kblock.from_shapely_srid(geometry = osm_gpd, srid = 4326) 
