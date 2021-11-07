@@ -122,7 +122,7 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
     gadm_blocks = pygeos.polygonize_full([gadm_blocks])
     gadm_blocks = gpd.GeoDataFrame.from_dict({"country_code": gadm_code[0:3],
                                               "gadm_code": gadm_code,
-                                              'geometry': pygeos.to_shapely(pygeos.get_parts(pygeos.normalize(gadm_blocks[0])))}, crs=4326) 
+                                              'geometry': pygeos.to_shapely(pygeos.get_parts(pygeos.normalize(gadm_blocks[0])))}).set_crs(4326)  
     gadm_blocks = gadm_blocks.reset_index(drop=True)
     gadm_blocks = gadm_blocks.assign(block_id = [gadm_code + '_' + str(x) for x in list(gadm_blocks.index)])
     gadm_blocks = gadm_blocks[['block_id','gadm_code','country_code','geometry']].to_crs(epsg=4326)
@@ -397,6 +397,3 @@ def compute_layers(block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame, bl
                                        'geometry': pygeos.to_shapely(block_layers_geometry)}).set_crs(epsg=3395)
     data = data.to_crs(4326)
     return data
-
-
-
