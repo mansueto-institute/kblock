@@ -57,7 +57,7 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
 
     t0 = time.time()
     logging.info(f"gadm_file: {gadm_file}")
-    gadm_gpd = gpd.read_file(gadm_file).to_crs(epsg = 4326) 
+    gadm_gpd = gpd.read_file(gadm_file).to_crs(4326)
     logging.info(f"gadm_gpd.shape: {gadm_gpd.shape}")
     gadm_col = max(list(filter(re.compile("GID_*").match, list(gadm_gpd.columns))))
     logging.info(f"gadm_col: {gadm_col}")
@@ -79,13 +79,11 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
     # OSM Directory
     country_metadata = pd.read_csv(country_code_file)
     geofabrik_name = list(country_metadata[country_metadata['country_code'] == country_code]['geofabrik_name'])
-    osm_file = Path(streets_parent_dir / str(geofabrik_name[0]+'_lines.geojson'))
+    osm_file = Path(streets_parent_dir) / str(geofabrik_name[0]+'_lines.geojson')
 
     # OSM linestrings
     t0 = time.time()
-    logging.info(f"osm_file: {osm_file}")
-    osm_gpd = gpd.read_file(osm_file).to_crs(epsg = 4326)
-    #osm_pygeos = pygeos.from_shapely(osm_gpd['geometry'])
+    osm_gpd = gpd.read_file(osm_file).to_crs(4326)
     osm_pygeos = kblock.from_shapely_srid(geometry = osm_gpd, srid = 4326) 
     t1 = time.time()
     logging.info(f"Read OSM time: {round(t1-t0,5)}")
@@ -106,7 +104,7 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
                 print(f'{country_code}, {round(trimmed_area_percent,5)}')
 
     # Building directory
-    building_file_list = list(filter(re.compile("buildings_").match, sorted(list(os.listdir(str(building_parent_dir / country_code))))))  
+    building_file_list = list(filter(re.compile("buildings_").match, sorted(list(os.listdir(Path(building_parent_dir) / country_code)))))  
     building_file_gadm_list = [(re.sub('buildings_', '', re.sub('.geojson', '', i))) for i in building_file_list] 
     gadm_list_match = [x for x in gadm_list if x in set(building_file_gadm_list)]
     gadm_list_no_match = [x for x in gadm_list if x not in set(building_file_gadm_list)]
@@ -119,6 +117,7 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
         'block_area': pd.Series(dtype='float'), 'building_area': pd.Series(dtype='float'), 
         'building_count': pd.Series(dtype='int'), 'building_layers': pd.Series(dtype='object'),  'k_complexity': pd.Series(dtype='int'), 
         'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
+    logging.info(f'k_init: {k_init}')
 
     # Iterate through GADMs:
     for i in gadm_list: 
@@ -127,8 +126,9 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
         t0 = time.time()
         gadm_blocks = kblock.build_blocks(gadm_data = gadm_gpd, osm_data = osm_pygeos, gadm_column = gadm_col, gadm_code = i)
         gadm_blocks_list = list(gadm_blocks['block_id'].unique())
+        logging.info(f'Build blocks success')
         t1 = time.time()
-        check_area = np.sum(gadm_blocks['geometry'].to_crs(epsg=3395).area)/np.sum(gadm_gpd[gadm_gpd[gadm_col] == i]['geometry'].to_crs(epsg=3395).area)
+        check_area = np.sum(gadm_blocks['geometry'].to_crs(3395).area)/np.sum(gadm_gpd[gadm_gpd[gadm_col] == i]['geometry'].to_crs(3395).area)
         logging.info(f"Subdivide GADM into blocks: {round(t1-t0,5)}")
         logging.info(f"gadm_blocks area / gadm_gpd area: {check_area}")
         logging.info(f"gadm_blocks.shape: {gadm_blocks.shape}")
@@ -138,7 +138,7 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
 
         t0 = time.time()
         building_file = list(filter(re.compile(str("%s" % i +'.geojson')).findall, sorted(building_file_list)))[0]
-        building_gpd = gpd.read_file(building_parent_dir / country_code / building_file).to_crs(epsg=4326) 
+        building_gpd = gpd.read_file(Path(building_parent_dir) / country_code / building_file).to_crs(4326) 
         t1 = time.time()
         logging.info(f"Building file read: {round(t1-t0,5)}")
         logging.info(f"building_gpd.shape: {building_gpd.shape}")
@@ -149,10 +149,10 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
         logging.info(f"Index building time: {round(t1-t0,5)}")
         logging.info(f"block_coded_buildings.shape: {block_coded_buildings.shape}")
         
-        block_coded_buildings = block_coded_buildings.to_crs(epsg = 3395)
-        gadm_blocks = gadm_blocks.to_crs(epsg = 3395)
+        block_coded_buildings = block_coded_buildings.to_crs(3395)
+        gadm_blocks = gadm_blocks.to_crs(3395)
         #osm_highways = pygeos.from_shapely(osm_gpd[osm_gpd['highway'].notnull()]['geometry'].to_crs(epsg=3395))
-        osm_highways = kblock.from_shapely_srid(geometry = osm_gpd[osm_gpd['highway'].notnull()].to_crs(epsg=3395), srid = 3395) 
+        osm_highways = kblock.from_shapely_srid(geometry = osm_gpd[osm_gpd['highway'].notnull()].to_crs(3395), srid = 3395) 
         logging.info(f"osm_highways.shape: {osm_gpd[osm_gpd['highway'].notnull()].shape}")
 
         # Iterate through blocks:
@@ -173,7 +173,7 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
             logging.info(f"block_id: {x} - {round(t1-t0,5)}")
 
         k_output = k_init.append(block_metrics, ignore_index=True)
-        k_output.to_file(output_dir_country / str('kblock_'+i+'.geojson'), driver='GeoJSON')
+        k_output.to_file(Path(output_dir_country) / str('kblock_'+i+'.geojson'), driver='GeoJSON')
         
     logging.info('Finished')
 
@@ -191,4 +191,3 @@ def setup(args=None):
 
 if __name__ == "__main__":
     main(**vars(setup()))
-
