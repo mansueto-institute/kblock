@@ -5,6 +5,7 @@ import pandas as pd
 import geopandas as gpd
 import pyproj
 import kblock
+gpd.options.use_pygeos = True
 
 import pyarrow
 import time
