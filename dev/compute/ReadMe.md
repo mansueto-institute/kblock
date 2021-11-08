@@ -19,7 +19,7 @@ conda deactivate
 
 ### Login and update repo
 ```
-ssh nmarchio@midway2.rcc.uchicago.edu
+ssh <cnetid>@midway2.rcc.uchicago.edu
 cd /project2/bettencourt/mnp/analytics/scripts/kblock
 git pull
 ```
@@ -34,8 +34,8 @@ sbatch /project2/bettencourt/mnp/analytics/scripts/kblock/dev/compute/deploy_mid
 
 ### Check logs and outputs
 ```
-less /project2/bettencourt/mnp/analytics/deploymentslog_output_sle.log
-less /project2/bettencourt/mnp/analytics/deploymentssle_job.err 
+less /project2/bettencourt/mnp/analytics/deployments/log_output_sle.log
+less /project2/bettencourt/mnp/analytics/deployments/sle_job.err 
 ls /project2/bettencourt/mnp/analytics/outputs/SLE
 
 conda deactivate 
