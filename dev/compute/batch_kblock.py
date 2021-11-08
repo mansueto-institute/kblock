@@ -71,17 +71,21 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
         logging.info(f"Subset GADM list: {gadm_list}")
         if not gadm_list: 
             raise ValueError('Empty GADM list')
+    logging.info(f"Processed GADM chunk")
 
     if output_gadm_list:
         gadm_list = [x for x in gadm_list if x not in set(output_gadm_list)]
         logging.info(f"Remove completed GADMs: {gadm_list}")
+    logging.info(f"Processed GADM list")
 
     # OSM Directory
     country_metadata = pd.read_csv(country_code_file)
+    logging.info(f"Processed country_code_file")
     geofabrik_name = list(country_metadata[country_metadata['country_code'] == country_code]['geofabrik_name'])
     osm_file = Path(streets_parent_dir) / str(geofabrik_name[0]+'_lines.geojson')
 
     # OSM linestrings
+    logging.info(f"osm_file: {osm_file}")
     t0 = time.time()
     osm_gpd = gpd.read_file(osm_file).to_crs(4326)
     osm_pygeos = kblock.from_shapely_srid(geometry = osm_gpd, srid = 4326) 
@@ -104,6 +108,7 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
                 print(f'{country_code}, {round(trimmed_area_percent,5)}')
 
     # Building directory
+    logging.info(f"Check building directory")
     building_file_list = list(filter(re.compile("buildings_").match, sorted(list(os.listdir(Path(building_parent_dir) / country_code)))))  
     building_file_gadm_list = [(re.sub('buildings_', '', re.sub('.geojson', '', i))) for i in building_file_list] 
     gadm_list_match = [x for x in gadm_list if x in set(building_file_gadm_list)]
