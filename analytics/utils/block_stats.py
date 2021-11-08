@@ -128,7 +128,8 @@ def add_block_pop_density(bldg_pop: gpd.GeoDataFrame,
 ######################################
 # COMMANDS FOR GENERAL AOI SUMMARIES #
 ######################################
-def make_superblock_summary(bldg_pop_data: gpd.GeoDataFrame, 
+def make_superblock_summary(bldg_pop_data_ls: gpd.GeoDataFrame, 
+                            bldg_pop_data_wp: gpd.GeoDataFrame, 
                             block_data: gpd.GeoDataFrame,
                             aoi_out_path: str = None,
                             ) -> None:
@@ -139,19 +140,16 @@ def make_superblock_summary(bldg_pop_data: gpd.GeoDataFrame,
         3. path to save output to
     '''
 
-    if isinstance(bldg_pop_data, gpd.GeoDataFrame):
-        bldg_pop = bldg_pop_data
-    else:
-        bldg_pop = load_bldg_pop(bldg_pop_data)
+    # if isinstance(bldg_pop_data_ls, gpd.GeoDataFrame):
+    #     bldg_pop = bldg_pop_data
+    # else:
+    #     bldg_pop = load_bldg_pop(bldg_pop_data)
 
     if 'block_id' not in bldg_pop.columns:
          bldg_pop = add_block_id(bldg_pop, block_data)
     
     bldg_pop = set_dtypes(bldg_pop, block_data)
-    bldg_pop = add_block_bldg_area_density(bldg_pop, block_data)
-    bldg_pop = add_block_bldg_count_density(bldg_pop, block_data)
     bldg_pop = add_block_pop(bldg_pop)
-    bldg_pop = add_block_pop_density(bldg_pop, block_data)
     bldg_pop['block_pop'] = bldg_pop['block_pop'].apply(lambda x: np.nan if x == 0 else x)
 
     if aoi_out_path is not None:

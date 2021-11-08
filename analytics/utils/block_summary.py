@@ -65,9 +65,11 @@ def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
 
 
     # (2) Allocate Landscan
+    country_code = superblock['block_id'][0].split('.')[0]
     gadm_list = list(set(superblock['gadm_code']))
+    world_pop_path = '/project2/bettencourt/mnp/analytics/data/WorldPop_tifs/' + country_code +'.tif'
     _, superblock_ls = extract_aoi_data_from_raster(superblock, str(landscan_path), save_geojson=False, save_tif=False)
-
+    _, superblock_wp = extract_aoi_data_from_raster(superblock, world_pop_path, save_geojson=False, save_tif=False)
     ### fiona error ###
     if superblock_buildings is None:
         summary_out_path = Path(summary_out_path)
@@ -85,10 +87,13 @@ def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
 
         return None
     ### --- ###
-    bldg_pop_alloc = allocate_population(superblock_buildings, superblock_ls, 'pop')
+    bldg_pop_alloc_ls = allocate_population(superblock_buildings, superblock_ls, 'pop')
+    bldg_pop_alloc_wp = allocate_population(superblock_buildings, superblock_wp, 'pop')
+    print(bldg_pop_alloc_ls.columns.tolist())
+
 
     # (2) Now assemble the other data
-    superblock_bldg_summary = block_stats.make_superblock_summary(bldg_pop_alloc, superblock)
+    superblock_bldg_summary = block_stats.make_superblock_summary(bldg_pop_alloc_ls, bldg_pop_alloc_wp, superblock)
     block_cols = [x for x in superblock_bldg_summary.columns if "block" in x]
     superblock_stats = superblock_bldg_summary[block_cols].drop_duplicates()
     superblock_summary = superblock.merge(superblock_stats, how='left', on='block_id')
