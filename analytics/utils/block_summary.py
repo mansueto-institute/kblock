@@ -67,7 +67,7 @@ def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
     # (2) Allocate Landscan
     country_code = superblock['block_id'][0].split('.')[0]
     gadm_list = list(set(superblock['gadm_code']))
-    world_pop_path = '/project2/bettencourt/mnp/analytics/data/WorldPop_tifs/' + country_code +'.tif'
+    world_pop_path = '/project2/bettencourt/mnp/analytics/data/population/WorldPop_tifs/' + country_code +'.tif'
     _, superblock_ls = extract_aoi_data_from_raster(superblock, str(landscan_path), save_geojson=False, save_tif=False)
     _, superblock_wp = extract_aoi_data_from_raster(superblock, world_pop_path, save_geojson=False, save_tif=False)
     ### fiona error ###
