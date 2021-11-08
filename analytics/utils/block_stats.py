@@ -104,14 +104,18 @@ def add_block_bldg_count_density(bldg_pop: gpd.GeoDataFrame,
     return bldg_pop
 
 
-def add_block_pop(bldg_pop: gpd.GeoDataFrame,
+def add_block_pop(bldg_pop_ls: gpd.GeoDataFrame,
+                  bldg_pop_wp: gpd.GeoDataFrame,
                   ) -> gpd.GeoDataFrame:
     """
     Calculates the population for the block and adds that to the bldg_pop geodf
     """
-    block_pop = bldg_pop[['block_id', 'bldg_pop']].groupby('block_id').sum()
-    block_pop.rename(columns={'bldg_pop': 'block_pop'}, inplace=True)
-    bldg_pop = bldg_pop.merge(block_pop, how='left', on='block_id')
+    block_pop_ls = bldg_pop_ls[['block_id', 'bldg_pop']].groupby('block_id').sum()
+    block_pop_wp = bldg_pop_wp[['block_id', 'bldg_pop']].groupby('block_id').sum()
+    block_pop_ls.rename(columns={'bldg_pop': 'block_pop_ls'}, inplace=True)
+    block_pop_wp.rename(columns={'bldg_pop': 'block_pop_wp'}, inplace=True)
+    bldg_pop = bldg_pop_ls.merge(block_pop_ls, how='left', on='block_id')
+    bldg_pop = bldg_pop.merge(block_pop_wp[['bloc_pop_wp', 'block_id']], how='left', on='block_id')
     return bldg_pop
 
 
@@ -141,15 +145,24 @@ def make_superblock_summary(bldg_pop_data_ls: gpd.GeoDataFrame,
     '''
 
     if isinstance(bldg_pop_data_ls, gpd.GeoDataFrame):
-        bldg_pop = bldg_pop_data
+        bldg_pop_ls = bldg_pop_data_ls
     else:
-        bldg_pop = load_bldg_pop(bldg_pop_data)
+        bldg_pop_ls = load_bldg_pop(bldg_pop_data_ls)
 
-    if 'block_id' not in bldg_pop.columns:
-         bldg_pop = add_block_id(bldg_pop, block_data)
+    if isinstance(bldg_pop_data_wp, gpd.GeoDataFrame):
+        bldg_pop_wp = bldg_pop_data_wp
+    else:
+        bldg_pop_wp = load_bldg_pop(bldg_pop_data_wp)
+
+
+    if 'block_id' not in bldg_pop_ls.columns:
+         bldg_pop_ls = add_block_id(bldg_pop_ls, block_data)
     
-    bldg_pop = set_dtypes(bldg_pop, block_data)
-    bldg_pop = add_block_pop(bldg_pop)
+    if 'block_id' not in bldg_pop_wp.columns:
+         bldg_pop_wp = add_block_id(bldg_pop_wp, block_data)
+
+    bldg_pop_ls = set_dtypes(bldg_pop_ls, block_data)
+    bldg_pop = add_block_pop(bldg_pop_ls, bldg_pop_wp)
     bldg_pop['block_pop'] = bldg_pop['block_pop'].apply(lambda x: np.nan if x == 0 else x)
 
     if aoi_out_path is not None:
