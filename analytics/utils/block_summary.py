@@ -89,8 +89,6 @@ def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
     ### --- ###
     bldg_pop_alloc_ls = allocate_population(superblock_buildings, superblock_ls, 'pop')
     bldg_pop_alloc_wp = allocate_population(superblock_buildings, superblock_wp, 'pop')
-    print(bldg_pop_alloc_ls.columns.tolist())
-
 
     # (2) Now assemble the other data
     superblock_bldg_summary = block_stats.make_superblock_summary(bldg_pop_alloc_ls, bldg_pop_alloc_wp, superblock)
@@ -109,7 +107,7 @@ def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
     if summary_out_path.suffix == '.geojson':
         superblock_summary.to_file(summary_out_path, driver='GeoJSON')
         superblock_bldg_summary.to_file(superblock_buildings_out_path, driver='GeoJSON')
-    elif summary_out_path.name.ends_with('parquet'):
+    elif summary_out_path.name.endswith('parquet'):
         utils.parquet_write(superblock, summary_out_path)
         utils.parquet_write(superblock_buildings, superblock_buildings_out_path)
     else:
