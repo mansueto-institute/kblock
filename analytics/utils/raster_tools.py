@@ -231,7 +231,8 @@ def allocate_population(buildings_gdf: gpd.GeoDataFrame,
     # up by bldg_id to reassemble
     bldg_pop = geo[['bldg_pop', 'bldg_id']].groupby('bldg_id').sum().reset_index()
     assert bldg_pop.shape[0] == buildings_gdf.shape[0], "ERROR - bldg count IN = {} but bldg count OUT = {}".format(buildings_gdf.shape[0], bldg_pop.shape[0] )
-    in_cols.append('bldg_id')
+    if 'bldg_id' not in in_cols:
+        in_cols.append('bldg_id')
     buildings_gdf = buildings_gdf[in_cols].merge(bldg_pop, on='bldg_id', how='left')
 
     return buildings_gdf

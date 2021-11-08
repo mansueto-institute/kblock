@@ -140,10 +140,10 @@ def make_superblock_summary(bldg_pop_data_ls: gpd.GeoDataFrame,
         3. path to save output to
     '''
 
-    # if isinstance(bldg_pop_data_ls, gpd.GeoDataFrame):
-    #     bldg_pop = bldg_pop_data
-    # else:
-    #     bldg_pop = load_bldg_pop(bldg_pop_data)
+    if isinstance(bldg_pop_data_ls, gpd.GeoDataFrame):
+        bldg_pop = bldg_pop_data
+    else:
+        bldg_pop = load_bldg_pop(bldg_pop_data)
 
     if 'block_id' not in bldg_pop.columns:
          bldg_pop = add_block_id(bldg_pop, block_data)
