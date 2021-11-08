@@ -115,7 +115,7 @@ def add_block_pop(bldg_pop_ls: gpd.GeoDataFrame,
     block_pop_ls.rename(columns={'bldg_pop': 'block_pop_ls'}, inplace=True)
     block_pop_wp.rename(columns={'bldg_pop': 'block_pop_wp'}, inplace=True)
     bldg_pop = bldg_pop_ls.merge(block_pop_ls, how='left', on='block_id')
-    bldg_pop = bldg_pop.merge(block_pop_wp[['bloc_pop_wp', 'block_id']], how='left', on='block_id')
+    bldg_pop = bldg_pop.merge(block_pop_wp, how='left', on='block_id')
     return bldg_pop
 
 
