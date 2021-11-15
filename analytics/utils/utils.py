@@ -64,7 +64,7 @@ def remove_duplicated_cols_from_merge(block_data: gpd.GeoDataFrame):
 
 def parquet_write(block_data: gpd.GeoDataFrame,
                   output_path: Path):
-    assert block_data.crs['init'] == 4326
+    assert block_data.crs == 4326
     block_data.to_parquet(output_path)
 
 
