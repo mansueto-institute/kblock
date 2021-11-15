@@ -108,8 +108,8 @@ def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
         superblock_summary.to_file(summary_out_path, driver='GeoJSON')
         superblock_bldg_summary.to_file(superblock_buildings_out_path, driver='GeoJSON')
     elif summary_out_path.name.endswith('parquet'):
-        utils.parquet_write(superblock, summary_out_path)
-        utils.parquet_write(superblock_buildings, superblock_buildings_out_path)
+        utils.parquet_write(superblock_summary, summary_out_path)
+        utils.parquet_write(superblock_bldg_summary, superblock_buildings_out_path)
     else:
         raise Exception(f'Out path file format {superblock_buildings_out_path.suffix} not recognized')
     print("Saved to: {}".format(str(summary_out_path)))
