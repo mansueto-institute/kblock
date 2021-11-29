@@ -156,7 +156,7 @@ def extract_aoi_data_from_raster(geometry_data: Union[str, gpd.GeoDataFrame],
                                       transform,
                                       window,
                                       raster_io)
-    gdf_data = gdf_data['pop'].apply(lambda x: 0 if np.isnan(x) else x)
+    gdf_data['pop'] = gdf_data['pop'].apply(lambda x: 0 if np.isnan(x) else x)
     gdf_data['pop'] = gdf_data['pop'].apply(lambda x: max(0, x))
 
     if save_tif:
