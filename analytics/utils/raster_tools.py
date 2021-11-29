@@ -156,7 +156,7 @@ def extract_aoi_data_from_raster(geometry_data: Union[str, gpd.GeoDataFrame],
                                       transform,
                                       window,
                                       raster_io)
-    gdf_data['pop'] = gdf_data['pop'].apply(lambda x: 0 if np.isnan(x) else x)
+
     gdf_data['pop'] = gdf_data['pop'].apply(lambda x: max(0, x))
 
     if save_tif:
@@ -211,6 +211,9 @@ def allocate_population(buildings_gdf: gpd.GeoDataFrame,
     geo.drop(columns=['obs_count'], inplace=True)
     geo = geo.merge(bldg_count, on='bldg_id', how='left')
 
+    null_geo = geo[geo['geometry_pop'].isna()]
+    geo = geo[~geo['geometry_pop'].isna()]
+  
     fn = lambda s: s['geometry'].intersection(s['geometry_pop'])
     geo['unique_geom'] = geo.apply(fn, axis=1)
     geo.set_geometry('unique_geom', inplace=True)
@@ -227,6 +230,7 @@ def allocate_population(buildings_gdf: gpd.GeoDataFrame,
     geo = geo.merge(geo_by_pop_id, on='pop_id', how='left')
     geo['alloc_factor'] = geo['num_area'] / geo['den_area']
     geo['bldg_pop'] = geo['alloc_factor'] * geo[pop_variable]
+    geo = gpd.GeoDataFrame(pd.concat([geo, null_geo], ignore_index=True), crs=geo.crs)
 
     # Because we split the bldg geoms w > 1 intersection, sum
     # up by bldg_id to reassemble
