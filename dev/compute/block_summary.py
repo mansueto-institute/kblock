@@ -18,6 +18,9 @@ import rasterio
 import rasterio.features
 
 
+ShapelyGeom = Union[MultiPolygon, Polygon, MultiLineString, LineString]
+
+
 def flex_load(block: Union[gpd.GeoDataFrame, str]) -> gpd.GeoDataFrame:
     """
     flex_load
@@ -190,7 +193,7 @@ def load_gadm_file(gadm_dir: str) -> gpd.GeoDataFrame:
 def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
                  landscan_path: Union[str, Path],
                  superblock_buildings: Union[str, Path, gpd.GeoDataFrame],
-                 summary_out_path: Union[str, Path],
+                 summary_out_path: Union[str, Path] = None,
                  ) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """
     Creates a summary of the given area using its population, blocks,
@@ -257,21 +260,22 @@ def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
 
     superblock_summary = remove_duplicated_cols_from_merge(superblock_summary)
     superblock_buildings_out_path = outdir / (fname + "-bldgs" + summary_out_path.suffix)
-    if summary_out_path.suffix == '.geojson':
-        superblock_summary.to_file(summary_out_path, driver='GeoJSON')
-        superblock_bldg_summary.to_file(superblock_buildings_out_path, driver='GeoJSON')
-    elif summary_out_path.name.endswith('parquet'):
-        parquet_write(superblock_summary, summary_out_path)
-        parquet_write(superblock_bldg_summary, superblock_buildings_out_path)
-    else:
-        raise Exception(f'Out path file format {superblock_buildings_out_path.suffix} not recognized')
-    print("Saved to: {}".format(str(summary_out_path)))
-    print("Saved to: {}".format(str(superblock_buildings_out_path)))
+
+    # Not writing because it gets written in batch_block
+    # if summary_out_path.suffix == '.geojson':
+    #     superblock_summary.to_file(summary_out_path, driver='GeoJSON')
+    #     superblock_bldg_summary.to_file(superblock_buildings_out_path, driver='GeoJSON')
+    # elif summary_out_path.name.endswith('parquet'):
+    #     parquet_write(superblock_summary, summary_out_path)
+    #     parquet_write(superblock_bldg_summary, superblock_buildings_out_path)
+    # else:
+    #     raise Exception(f'Out path file format {superblock_buildings_out_path.suffix} not recognized')
+    # print("Saved to: {}".format(str(summary_out_path)))
+    # print("Saved to: {}".format(str(superblock_buildings_out_path)))
 
     return superblock_summary, superblock_bldg_summary
 
 
-ShapelyGeom = Union[MultiPolygon, Polygon, MultiLineString, LineString]
 
 
 def load_raster_selection(raster_io: rasterio.io.DatasetReader,
@@ -452,6 +456,7 @@ def allocate_population(buildings_gdf: gpd.GeoDataFrame,
     geo = geo.merge(bldg_count, on='bldg_id', how='left')
 
     null_geo = geo[geo['geometry_pop'].isna()]
+    print(f'Superblock had {len(null_geo)} null geometries.')
     geo = geo[~geo['geometry_pop'].isna()]
 
     fn = lambda s: s['geometry'].intersection(s['geometry_pop'])

@@ -178,7 +178,8 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
             logging.info(f"block_id: {x} - {round(t1-t0,5)}")
 
         k_output = k_init.append(block_metrics, ignore_index=True)
-        k_output.to_file(Path(output_dir_country) / str('kblock_'+i+'.geojson'), driver='GeoJSON')
+        kblock_w_pop, kblock_bldg = make_summary(k_output, '/project2/bettencourt/mnp/analytics/data/population/ls_2019.tif', block_coded_buildings)
+        kblock_w_pop.to_file(Path(output_dir_country) / str('kblock_'+i+'.geojson'), driver='GeoJSON')
         
     logging.info('Finished')
 
