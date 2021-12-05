@@ -91,8 +91,7 @@ def raster_to_geodataframe(raster_data: np.ndarray,
                            raster_io: rasterio.io.DatasetReader,
                            ) -> gpd.GeoDataFrame:
     """
-    Takes in raster data as a numpy array and converts it to a geo df, then
-    writes that to file
+    Takes in raster data as a numpy array and converts it to a geo df
     """
     if raster_data.ndim == 3:
         assert raster_data.shape[0] == 1, "ERROR - can't handle multichannel yet"
@@ -156,7 +155,7 @@ def extract_aoi_data_from_raster(geometry_data: Union[str, gpd.GeoDataFrame],
                                       transform,
                                       window,
                                       raster_io)
-    gdf_data['pop'] = gdf_data['pop'].apply(lambda x: 0 if np.isnan(x) else x)
+
     gdf_data['pop'] = gdf_data['pop'].apply(lambda x: max(0, x))
 
     if save_tif:
@@ -164,10 +163,6 @@ def extract_aoi_data_from_raster(geometry_data: Union[str, gpd.GeoDataFrame],
         save_np_as_geotiff(raster_data_selection, transform, str(tif_path))
     if save_geojson:
         geojson_path = out_path.with_suffix('.geojson')
-        # gdf_data = raster_to_geodataframe(raster_data_selection, 
-        #                                   transform,
-        #                                   window,
-        #                                   raster_io)
         gdf_data.to_file(geojson_path, driver='GeoJSON')
         print("Saved GeoJSON at: {}".format(geojson_path))
     return raster_data_selection, gdf_data
@@ -211,6 +206,9 @@ def allocate_population(buildings_gdf: gpd.GeoDataFrame,
     geo.drop(columns=['obs_count'], inplace=True)
     geo = geo.merge(bldg_count, on='bldg_id', how='left')
 
+    null_geo = geo[geo['geometry_pop'].isna()]
+    geo = geo[~geo['geometry_pop'].isna()]
+
     fn = lambda s: s['geometry'].intersection(s['geometry_pop'])
     geo['unique_geom'] = geo.apply(fn, axis=1)
     geo.set_geometry('unique_geom', inplace=True)
@@ -227,6 +225,8 @@ def allocate_population(buildings_gdf: gpd.GeoDataFrame,
     geo = geo.merge(geo_by_pop_id, on='pop_id', how='left')
     geo['alloc_factor'] = geo['num_area'] / geo['den_area']
     geo['bldg_pop'] = geo['alloc_factor'] * geo[pop_variable]
+    
+    geo = gpd.GeoDataFrame(pd.concat([geo, null_geo], ignore_index=True), crs=geo.crs)
 
     # Because we split the bldg geoms w > 1 intersection, sum
     # up by bldg_id to reassemble
@@ -273,28 +273,4 @@ def alloc_pop_to_buildings(buildings_gdf_path: str,
     bldg_pop = allocate_population(buildings_gdf, population_gdf, pop_variable)
     alloc_out_path.parent.mkdir(exist_ok=True, parents=True)
     bldg_pop.to_file(alloc_out_path, driver='GeoJSON')
-
-if __name__ == "__main__":
-    
-    freetown_ls = Path("../data/Freetown/Freetown_landscan.tif")
-    freetown_fb = Path("../data/Freetown/Freetown_facebook.tif")
-
-    # extract_aoi_data_from_raster(blocks_path, ls_path, freetown_ls)
-    # extract_aoi_data_from_raster(blocks_path, fb_path, freetown_fb)
-
-
-    blocks = gdf.read_file(blocks_path)
-
-    # (1) Landscan and Facebook pop apply to blocks, via block area
-    pop_ls = gpd.read_file(freetown_ls.with_suffix('.geojson'))
-    gt0 = pop_ls['data'] > 1
-    pop_ls['data'] = pop_ls['data'] * gt0
-    ls_blocks_est = area_interpolate(pop_ls, blocks, extensive_variables=['data'])
-
-    pop_fb = gpd.read_file(freetown_fb.with_suffix('.geojson'))
-    pop_fb['geometry'] = pop_fb['geometry'].apply(fix_invalid_polygons)
-    fb_blocks_est = area_interpolate(pop_fb, blocks, extensive_variables=['data'])
-
-    blocks_diff = ls_blocks_est['data'] - fb_blocks_est['data']
-    gdf_diff = gpd.GeoDataFrame({'geometry':blocks['geometry'], 'difference': blocks_diff})
 
