@@ -98,7 +98,7 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
         t0 = time.time()
         gadm_gpd_trim = kblock.trim_coastline(gadm_data = gadm_gpd, osm_data = osm_gpd)
         trimmed_area_percent = (sum(gadm_gpd.to_crs(3395).area/10**6)-sum(gadm_gpd_trim.to_crs(3395).area/10**6))/sum(gadm_gpd_trim.to_crs(3395).area/10**6)
-        gadm_gpd = gpd.clip(gdf = gadm_gpd, mask = gadm_gpd_trim, keep_geom_type=True)
+        gadm_gpd = gpd.clip(gdf = gadm_gpd['geometry'], mask = gadm_gpd_trim, keep_geom_type=True)
         t1 = time.time()
         logging.info(f"Trim coastline time: {round(t1-t0,5)}")
         logging.info(f"Trimmed percentage: {trimmed_area_percent}")
