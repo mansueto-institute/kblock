@@ -94,11 +94,14 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
     logging.info(f"osm_gpd.shape: {osm_gpd.shape}")
 
     # Trim coastline
-    if osm_gpd[osm_gpd['natural'].isin(['coastline','water'])].shape[0] > 0:
+    if osm_gpd[osm_gpd['natural'].isin(['coastline'])].shape[0] > 0:
         t0 = time.time()
         gadm_gpd_trim = kblock.trim_coastline(gadm_data = gadm_gpd, osm_data = osm_gpd)
         trimmed_area_percent = (sum(gadm_gpd.to_crs(3395).area/10**6)-sum(gadm_gpd_trim.to_crs(3395).area/10**6))/sum(gadm_gpd_trim.to_crs(3395).area/10**6)
-        gadm_gpd = gpd.clip(gdf = gadm_gpd['geometry'], mask = gadm_gpd_trim, keep_geom_type=True)
+        gadm_gpd_clip = gpd.clip(gdf = gadm_gpd['geometry'], mask = gadm_gpd_trim.unary_union, keep_geom_type=True)
+        gadm_gpd_clip = gpd.GeoDataFrame(geometry=gpd.GeoSeries(gadm_gpd_clip)).reset_index(drop=True)
+        gadm_gpd_clip = gpd.overlay(df1 = gadm_gpd_clip, df2 = gadm_gpd, keep_geom_type=True)
+        gadm_gpd = gadm_gpd_clip.dissolve(by=[gadm_col], as_index = False)
         t1 = time.time()
         logging.info(f"Trim coastline time: {round(t1-t0,5)}")
         logging.info(f"Trimmed percentage: {trimmed_area_percent}")
