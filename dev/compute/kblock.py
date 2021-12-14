@@ -82,7 +82,7 @@ def trim_coastline(gadm_data: gpd.GeoDataFrame, osm_data: gpd.GeoDataFrame) -> g
 
     land = pygeos.from_shapely(gadm_data['geometry'])
     land_center = pygeos.buffer(pygeos.centroid(land), radius=.00001, quadsegs=50) 
-    coast = pygeos.union_all(pygeos.from_shapely(osm_data[osm_data['natural'].isin(['coastline','water'])]['geometry']))
+    coast = pygeos.line_merge(pygeos.union_all(pygeos.from_shapely(osm_data[osm_data['natural'].isin(['coastline'])]['geometry'])))
     coast_buffer = pygeos.buffer(coast, radius=.00001, quadsegs=50) 
     bbox_poly = pygeos.difference(bbox_enlarge,coast_buffer)
     bbox_poly_parts = pygeos.get_parts(bbox_poly)
