@@ -7,6 +7,9 @@ conda install pygeos=0.11.1 --channel conda-forge --yes
 conda install geopandas=0.10.2 --channel conda-forge --yes
 conda install pyarrow --channel conda-forge --yes
 conda install dask --channel conda-forge --yes
+conda install affine --channel conda-forage --yes
+conda install tobler --channel conda-forge --yes
+conda install rasterio --channel conda-forge --yes
 ```
 
 ### Local deploy
