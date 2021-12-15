@@ -20,6 +20,7 @@ from pathlib import Path
 from contextlib import redirect_stderr, redirect_stdout
 import logging
 import warnings
+import block_summary
 
 def gadm_dir_to_path(gadm_dir: Union[str, Path]) -> str:
     """
@@ -38,7 +39,9 @@ def gadm_dir_to_path(gadm_dir: Union[str, Path]) -> str:
     files.sort(key=sort_fn)
     return files[-1]
 
-def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent_dir: Path, gadm_chunk: list, streets_parent_dir: Path, building_parent_dir: Path, output_dir: Path):
+def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent_dir: Path, 
+         gadm_chunk: list, streets_parent_dir: Path, building_parent_dir: Path, population_raster_path: Path,
+         output_dir: Path):
 
     logging.getLogger().setLevel("DEBUG")
     logging.basicConfig(filename=Path(log_file), format='%(asctime)s:%(message)s: ', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
@@ -94,18 +97,18 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
     logging.info(f"osm_gpd.shape: {osm_gpd.shape}")
 
     # Trim coastline
-    if osm_gpd[osm_gpd['natural'].isin(['coastline','water'])].shape[0] > 0:
-        t0 = time.time()
-        gadm_gpd_trim = kblock.trim_coastline(gadm_data = gadm_gpd, osm_data = osm_gpd)
-        trimmed_area_percent = (sum(gadm_gpd.to_crs(3395).area/10**6)-sum(gadm_gpd_trim.to_crs(3395).area/10**6))/sum(gadm_gpd_trim.to_crs(3395).area/10**6)
-        gadm_gpd = gpd.clip(gdf = gadm_gpd, mask = gadm_gpd_trim, keep_geom_type=True)
-        t1 = time.time()
-        logging.info(f"Trim coastline time: {round(t1-t0,5)}")
-        logging.info(f"Trimmed percentage: {trimmed_area_percent}")
-        logging.info(f"gadm_gpd_trim.shape: {gadm_gpd.shape}")
-        with open(Path(os.path.dirname(Path(log_file))) / '_log_trim_coast.txt', 'a') as f: 
-            with redirect_stdout(f):
-                print(f'{country_code}, {round(trimmed_area_percent,5)}')
+    # if osm_gpd[osm_gpd['natural'].isin(['coastline','water'])].shape[0] > 0:
+    #     t0 = time.time()
+    #     gadm_gpd_trim = kblock.trim_coastline(gadm_data = gadm_gpd, osm_data = osm_gpd)
+    #     trimmed_area_percent = (sum(gadm_gpd.to_crs(3395).area/10**6)-sum(gadm_gpd_trim.to_crs(3395).area/10**6))/sum(gadm_gpd_trim.to_crs(3395).area/10**6)
+    #     gadm_gpd = gpd.clip(gdf = gadm_gpd, mask = gadm_gpd_trim, keep_geom_type=True)
+    #     t1 = time.time()
+    #     logging.info(f"Trim coastline time: {round(t1-t0,5)}")
+    #     logging.info(f"Trimmed percentage: {trimmed_area_percent}")
+    #     logging.info(f"gadm_gpd_trim.shape: {gadm_gpd.shape}")
+    #     with open(Path(os.path.dirname(Path(log_file))) / '_log_trim_coast.txt', 'a') as f: 
+    #         with redirect_stdout(f):
+    #             print(f'{country_code}, {round(trimmed_area_percent,5)}')
 
     # Building directory
     logging.info(f"Check building directory")
@@ -125,6 +128,10 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
     logging.info(f'k_init: {k_init}')
 
     # Iterate through GADMs:
+    gadm_list = [i for i in gadm_list]
+    logging.info(f'Running over GADMs: {gadm_list}')
+    def main_helper(gadm}:
+
     for i in gadm_list: 
         logging.info(f"GADM: {i}")
 
@@ -178,7 +185,11 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
             logging.info(f"block_id: {x} - {round(t1-t0,5)}")
 
         k_output = k_init.append(block_metrics, ignore_index=True)
-        k_output.to_file(Path(output_dir_country) / str('kblock_'+i+'.geojson'), driver='GeoJSON')
+        t0 = time.time()
+        kblock_w_pop = block_summary.make_summary(k_output, population_raster_path, building_gpd, log_file)
+        t1 = time.time()
+        logging.info(f"Block statistics time: {round(t1-t0,5)}")
+        kblock_w_pop.to_file(Path(output_dir_country) / str('kblock_'+i+'.geojson'), driver='GeoJSON')
         
     logging.info('Finished')
 
@@ -191,6 +202,7 @@ def setup(args=None):
     parser.add_argument('--gadm_parent_dir', required=True, type=Path, dest="gadm_parent_dir", help="GADM parent directory")
     parser.add_argument('--streets_parent_dir', required=True, type=Path, dest="streets_parent_dir", help="list of GADM codes")
     parser.add_argument('--building_parent_dir', required=True, type=Path, dest="building_parent_dir", help="building file parent directory")
+    parser.add_argument('--population_raster_path', required=True, type=Path, dest="population_raster_path", help="Filepath for population raster data")
     parser.add_argument('--output_dir', required=True, type=Path, dest="output_dir", help="output directory")
     return parser.parse_args(args)
 

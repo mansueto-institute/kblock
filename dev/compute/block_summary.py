@@ -16,7 +16,8 @@ from tobler.area_weighted import _area_tables, area_interpolate
 from tobler.util.util import _check_crs, _nan_check, _check_presence_of_crs
 import rasterio 
 import rasterio.features
-
+import os
+from contextlib import redirect_stderr, redirect_stdout
 
 def flex_load(block: Union[gpd.GeoDataFrame, str]) -> gpd.GeoDataFrame:
     """
@@ -190,7 +191,7 @@ def load_gadm_file(gadm_dir: str) -> gpd.GeoDataFrame:
 def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
                  landscan_path: Union[str, Path],
                  superblock_buildings: Union[str, Path, gpd.GeoDataFrame],
-                 summary_out_path: Union[str, Path],
+                 log_file: Union[str, Path]
                  ) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """
     Creates a summary of the given area using its population, blocks,
@@ -215,6 +216,9 @@ def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
         else: 
             raise Exception(f'Unknown value of type {type(superblock_buildings)} passed as superblock_buildings')
         superblock_buildings = gpd.read_file(superblock_buildings_path)
+    with open(Path(os.path.dirname(log_file)) / '_log_block_summary.txt', 'a') as f:
+        with redirect_stdout(f):
+            print(f"{superblock.iloc[0]['gadm_code']} read in to make_summary with {len(superblock)} rows")
 
 
     # (2) Allocate Landscan
@@ -242,33 +246,40 @@ def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
     ### --- ###
     bldg_pop_alloc_ls = allocate_population(superblock_buildings, superblock_ls, 'pop')
     bldg_pop_alloc_wp = allocate_population(superblock_buildings, superblock_wp, 'pop')
+    with open(Path(os.path.dirname(log_file)) / '_log_block_summary.txt', 'a') as f:
+       	with redirect_stdout(f):
+       	    print(f"{len(bldg_pop_alloc_ls[bldg_pop_alloc_ls['geometry'].isna()])} null geometries for LandScan")
+            print(f"{len(bldg_pop_alloc_wp[bldg_pop_alloc_wp['geometry'].isna()])} null geometries for WorldPop")
 
     # (2) Now assemble the other data
     superblock_bldg_summary = make_superblock_summary(bldg_pop_alloc_ls, bldg_pop_alloc_wp, superblock)
     block_cols = [x for x in superblock_bldg_summary.columns if "block" in x]
     superblock_stats = superblock_bldg_summary[block_cols].drop_duplicates()
+    superblock_stats = superblock_stats.drop('block_area', 1)
     superblock_summary = superblock.merge(superblock_stats, how='left', on='block_id')
+    superblock_summary['block_pop_ls'] = [0 if np.isnan(pop_est) and building_count == 0 else pop_est for pop_est, building_count in zip(superblock_summary['block_pop_ls'], superblock_summary['building_count'])]
+    superblock_summary['block_pop_wp'] = [0 if np.isnan(pop_est) and building_count == 0 else pop_est for pop_est, building_count in	zip(superblock_summary['block_pop_wp'],	superblock_summary['building_count'])]
 
     # (3) Save
-    summary_out_path = Path(summary_out_path)
-    fname = summary_out_path.stem
-    outdir = summary_out_path.parent
-    outdir.mkdir(exist_ok=True, parents=True)
+    # summary_out_path = Path(summary_out_path)
+    # fname = summary_out_path.stem
+    # outdir = summary_out_path.parent
+    # outdir.mkdir(exist_ok=True, parents=True)
 
-    superblock_summary = remove_duplicated_cols_from_merge(superblock_summary)
-    superblock_buildings_out_path = outdir / (fname + "-bldgs" + summary_out_path.suffix)
-    if summary_out_path.suffix == '.geojson':
-        superblock_summary.to_file(summary_out_path, driver='GeoJSON')
-        superblock_bldg_summary.to_file(superblock_buildings_out_path, driver='GeoJSON')
-    elif summary_out_path.name.endswith('parquet'):
-        parquet_write(superblock_summary, summary_out_path)
-        parquet_write(superblock_bldg_summary, superblock_buildings_out_path)
-    else:
-        raise Exception(f'Out path file format {superblock_buildings_out_path.suffix} not recognized')
-    print("Saved to: {}".format(str(summary_out_path)))
-    print("Saved to: {}".format(str(superblock_buildings_out_path)))
+    # superblock_summary = remove_duplicated_cols_from_merge(superblock_summary)
+    # superblock_buildings_out_path = outdir / (fname + "-bldgs" + summary_out_path.suffix)
+    # if summary_out_path.suffix == '.geojson':
+        # superblock_summary.to_file(summary_out_path, driver='GeoJSON')
+        # superblock_bldg_summary.to_file(superblock_buildings_out_path, driver='GeoJSON')
+    # elif summary_out_path.name.endswith('parquet'):
+        # parquet_write(superblock_summary, summary_out_path)
+        # parquet_write(superblock_bldg_summary, superblock_buildings_out_path)
+    # else:
+    #     raise Exception(f'Out path file format {superblock_buildings_out_path.suffix} not recognized')
+    # print("Saved to: {}".format(str(summary_out_path)))
+    # print("Saved to: {}".format(str(superblock_buildings_out_path)))
 
-    return superblock_summary, superblock_bldg_summary
+    return superblock_summary
 
 
 ShapelyGeom = Union[MultiPolygon, Polygon, MultiLineString, LineString]
