@@ -159,7 +159,7 @@ def main_helper(gdd: dict) -> None:
     logging.info(f"gadm_blocks.shape: {gdd['gadm_blocks'].shape}")
     with open(Path(os.path.dirname(Path(gdd['log_file']))) / '_log_block_integrity.txt', 'a') as f: 
         with redirect_stdout(f):
-            print(f'{gdd['gadm']}, {round(check_area,5)}')
+            print(f'{gdd["gadm"]}, {round(check_area,5)}')
 
     t0 = time.time()
     building_file = list(filter(re.compile(str("%s" % gdd['gadm'] +'.geojson')).findall, sorted(gdd['building_file_list'])))[0]
@@ -199,10 +199,10 @@ def main_helper(gdd: dict) -> None:
 
     k_output = k_init.append(block_metrics, ignore_index=True)
     t0 = time.time()
-    kblock_w_pop = block_summary.make_summary(k_output, gdd['population_raster_path'], building_gpd, log_file)
+    kblock_w_pop = block_summary.make_summary(k_output, gdd['population_raster_path'], gdd['building_gpd'], gdd['log_file'])
     t1 = time.time()
     logging.info(f"Block statistics time: {round(t1-t0,5)}")
-    kblock_w_pop.to_file(Path(output_dir_country) / str('kblock_'+gadm+'.geojson'), driver='GeoJSON')
+    kblock_w_pop.to_file(Path(output_dir_country) / str('kblock_'+gdd['gadm']+'.geojson'), driver='GeoJSON')
 
 
 def setup(args=None):
