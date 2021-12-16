@@ -21,6 +21,7 @@ from contextlib import redirect_stderr, redirect_stdout
 import logging
 import warnings
 import block_summary
+import multiprocessing
 
 def gadm_dir_to_path(gadm_dir: Union[str, Path]) -> str:
     """
@@ -130,17 +131,15 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
     # Iterate through GADMs:
     gadm_list = [i for i in gadm_list]
     logging.info(f'Running over GADMs: {gadm_list}')
-    def main_helper(gadm}:
-
-    for i in gadm_list: 
-        logging.info(f"GADM: {i}")
+    def main_helper(gadm):
+        logging.info(f"GADM: {gadm}")
 
         t0 = time.time()
-        gadm_blocks = kblock.build_blocks(gadm_data = gadm_gpd, osm_data = osm_pygeos, gadm_column = gadm_col, gadm_code = i)
+        gadm_blocks = kblock.build_blocks(gadm_data = gadm_gpd, osm_data = osm_pygeos, gadm_column = gadm_col, gadm_code = gadm)
         gadm_blocks_list = list(gadm_blocks['block_id'].unique())
         logging.info(f'Build blocks success')
         t1 = time.time()
-        check_area = np.sum(gadm_blocks['geometry'].to_crs(3395).area)/np.sum(gadm_gpd[gadm_gpd[gadm_col] == i]['geometry'].to_crs(3395).area)
+        check_area = np.sum(gadm_blocks['geometry'].to_crs(3395).area)/np.sum(gadm_gpd[gadm_gpd[gadm_col] == gadm]['geometry'].to_crs(3395).area)
         logging.info(f"Subdivide GADM into blocks: {round(t1-t0,5)}")
         logging.info(f"gadm_blocks area / gadm_gpd area: {check_area}")
         logging.info(f"gadm_blocks.shape: {gadm_blocks.shape}")
@@ -149,7 +148,7 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
                 print(f'{i}, {round(check_area,5)}')
 
         t0 = time.time()
-        building_file = list(filter(re.compile(str("%s" % i +'.geojson')).findall, sorted(building_file_list)))[0]
+        building_file = list(filter(re.compile(str("%s" % gadm +'.geojson')).findall, sorted(building_file_list)))[0]
         building_gpd = gpd.read_file(Path(building_parent_dir) / country_code / building_file).to_crs(4326) 
         t1 = time.time()
         logging.info(f"Building file read: {round(t1-t0,5)}")
@@ -189,8 +188,10 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
         kblock_w_pop = block_summary.make_summary(k_output, population_raster_path, building_gpd, log_file)
         t1 = time.time()
         logging.info(f"Block statistics time: {round(t1-t0,5)}")
-        kblock_w_pop.to_file(Path(output_dir_country) / str('kblock_'+i+'.geojson'), driver='GeoJSON')
-        
+        kblock_w_pop.to_file(Path(output_dir_country) / str('kblock_'+gadm+'.geojson'), driver='GeoJSON')
+    
+    with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+        pool.map(main_helper, gadm_list)
     logging.info('Finished')
 
 def setup(args=None):
