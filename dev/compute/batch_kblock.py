@@ -163,7 +163,7 @@ def main_helper(gdd: dict) -> None:
 
     t0 = time.time()
     building_file = list(filter(re.compile(str("%s" % gdd['gadm'] +'.geojson')).findall, sorted(gdd['building_file_list'])))[0]
-    building_gpd = gpd.read_file(Path(building_parent_dir) / country_code / building_file).to_crs(4326) 
+    building_gpd = gpd.read_file(Path(gdd['building_parent_dir']) / gdd['country_code'] / building_file).to_crs(4326) 
     t1 = time.time()
     logging.info(f"Building file read: {round(t1-t0,5)}")
     logging.info(f"building_gpd.shape: {gdd['building_gpd'].shape}")
