@@ -166,10 +166,10 @@ def main_helper(gdd: dict) -> None:
     building_gpd = gpd.read_file(Path(gdd['building_parent_dir']) / gdd['country_code'] / building_file).to_crs(4326) 
     t1 = time.time()
     logging.info(f"Building file read: {round(t1-t0,5)}")
-    logging.info(f"building_gpd.shape: {gdd['building_gpd'].shape}")
+    logging.info(f"building_gpd.shape: {building_gpd.shape}")
     
     t0 = time.time()
-    block_coded_buildings = kblock.index_buildings(gadm_block_data = gadm_blocks, bldg_data = gdd['building_gpd'])
+    block_coded_buildings = kblock.index_buildings(gadm_block_data = gadm_blocks, bldg_data = building_gpd)
     t1 = time.time()
     logging.info(f"Index building time: {round(t1-t0,5)}")
     logging.info(f"block_coded_buildings.shape: {block_coded_buildings.shape}")
@@ -199,7 +199,7 @@ def main_helper(gdd: dict) -> None:
 
     k_output = k_init.append(block_metrics, ignore_index=True)
     t0 = time.time()
-    kblock_w_pop = block_summary.make_summary(k_output, gdd['population_raster_path'], gdd['building_gpd'], gdd['log_file'])
+    kblock_w_pop = block_summary.make_summary(k_output, gdd['population_raster_path'], building_gpd, gdd['log_file'])
     t1 = time.time()
     logging.info(f"Block statistics time: {round(t1-t0,5)}")
     kblock_w_pop.to_file(Path(output_dir_country) / str('kblock_'+gdd['gadm']+'.geojson'), driver='GeoJSON')
