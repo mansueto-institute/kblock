@@ -153,7 +153,7 @@ def main_helper(gdd: dict) -> None:
     gadm_blocks_list = list(gadm_blocks['block_id'].unique())
     logging.info(f'Build blocks success')
     t1 = time.time()
-    check_area = np.sum(gadm_blocks['geometry'].to_crs(3395).area)/np.sum(gdd['gadm_gpd'][gdd['gadm_gpd'][gdd['gadm_col']] == gdd['gadm']]['geometry'].to_crs(3395).area)
+    check_area = np.sum(gadm_blocks['geometry'].to_crs(3395).area)/np.sum(gdd['gadm_gpd'][gdd['gadm_gpd'][gdd['gadm_column']] == gdd['gadm']]['geometry'].to_crs(3395).area)
     logging.info(f"Subdivide GADM into blocks: {round(t1-t0,5)}")
     logging.info(f"gadm_blocks area / gadm_gpd area: {check_area}")
     logging.info(f"gadm_blocks.shape: {gadm_blocks.shape}")
