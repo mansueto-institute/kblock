@@ -129,70 +129,81 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
     logging.info(f'k_init: {k_init}')
 
     # Iterate through GADMs:
-    gadm_list = [i for i in gadm_list]
+    gadm_data_list = [{'gadm': i, 'gadm_gpd': gadm_gpd, 'osm_data': osm_pygeos, 'gadm_column': gadm_col,
+                       'gadm_blocks': gadm_blocks, 'log_file': log_file, 'building_parent_dir': building_parent_dir,
+                       'country_code': country_code, 'building_file_list': building_file_list,
+                       'output_dir_country': output_dir_country, 'osm_gpd': osm_gpd,
+                       'population_raster_path': population_raster_path} for i in gadm_list]
     logging.info(f'Running over GADMs: {gadm_list}')
-    def main_helper(gadm):
-        logging.info(f"GADM: {gadm}")
 
-        t0 = time.time()
-        gadm_blocks = kblock.build_blocks(gadm_data = gadm_gpd, osm_data = osm_pygeos, gadm_column = gadm_col, gadm_code = gadm)
-        gadm_blocks_list = list(gadm_blocks['block_id'].unique())
-        logging.info(f'Build blocks success')
-        t1 = time.time()
-        check_area = np.sum(gadm_blocks['geometry'].to_crs(3395).area)/np.sum(gadm_gpd[gadm_gpd[gadm_col] == gadm]['geometry'].to_crs(3395).area)
-        logging.info(f"Subdivide GADM into blocks: {round(t1-t0,5)}")
-        logging.info(f"gadm_blocks area / gadm_gpd area: {check_area}")
-        logging.info(f"gadm_blocks.shape: {gadm_blocks.shape}")
-        with open(Path(os.path.dirname(Path(log_file))) / '_log_block_integrity.txt', 'a') as f: 
-            with redirect_stdout(f):
-                print(f'{i}, {round(check_area,5)}')
-
-        t0 = time.time()
-        building_file = list(filter(re.compile(str("%s" % gadm +'.geojson')).findall, sorted(building_file_list)))[0]
-        building_gpd = gpd.read_file(Path(building_parent_dir) / country_code / building_file).to_crs(4326) 
-        t1 = time.time()
-        logging.info(f"Building file read: {round(t1-t0,5)}")
-        logging.info(f"building_gpd.shape: {building_gpd.shape}")
-        
-        t0 = time.time()
-        block_coded_buildings = kblock.index_buildings(gadm_block_data = gadm_blocks, bldg_data = building_gpd)
-        t1 = time.time()
-        logging.info(f"Index building time: {round(t1-t0,5)}")
-        logging.info(f"block_coded_buildings.shape: {block_coded_buildings.shape}")
-        
-        block_coded_buildings = block_coded_buildings.to_crs(3395)
-        gadm_blocks = gadm_blocks.to_crs(3395)
-        #osm_highways = pygeos.from_shapely(osm_gpd[osm_gpd['highway'].notnull()]['geometry'].to_crs(epsg=3395))
-        osm_highways = kblock.from_shapely_srid(geometry = osm_gpd[osm_gpd['highway'].notnull()].to_crs(3395), srid = 3395) 
-        logging.info(f"osm_highways.shape: {osm_gpd[osm_gpd['highway'].notnull()].shape}")
-
-        # Iterate through blocks:
-        logging.info("Compute k")
-        block_metrics = []
-        for x in gadm_blocks_list: 
-            t0 = time.time()
-            with open(Path(os.path.dirname(Path(log_file))) / '_log_street_buffer.txt', 'a') as f: 
-                with redirect_stdout(f):
-                    df_k = kblock.compute_k(block_data = gadm_blocks,
-                                            bldg_data = block_coded_buildings, 
-                                            block_col = 'block_id', 
-                                            block_id = x,
-                                            street_linestrings = osm_highways,
-                                            buffer_streets=True)
-            block_metrics.append(df_k)
-            t1 = time.time()
-            logging.info(f"block_id: {x} - {round(t1-t0,5)}")
-
-        k_output = k_init.append(block_metrics, ignore_index=True)
-        t0 = time.time()
-        kblock_w_pop = block_summary.make_summary(k_output, population_raster_path, building_gpd, log_file)
-        t1 = time.time()
-        logging.info(f"Block statistics time: {round(t1-t0,5)}")
-        kblock_w_pop.to_file(Path(output_dir_country) / str('kblock_'+gadm+'.geojson'), driver='GeoJSON')
-    
     with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
-        pool.map(main_helper, gadm_list)
+        pool.map(main_helper, gadm_data_list)
     logging.info('Finished')
+
+
+def main_helper(gdd: dict) -> None:
+    logging.getLogger().setLevel("DEBUG")
+    logging.basicConfig(filename=Path(gdd['log_file']), format='%(asctime)s:%(message)s: ', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
+    logging.info(f"Starting: {gdd['country_code']}")
+    logging.info(f"GADM: {gdd['gadm']}")
+
+    t0 = time.time()
+    gadm_blocks = kblock.build_blocks(gadm_data = gdd['gadm_gpd'], osm_data = gdd['osm_pygeos'], 
+                                      gadm_column = gdd['gadm_column'], gadm_code = gdd['gadm'])
+    gadm_blocks_list = list(gdd['gadm_blocks']['block_id'].unique())
+    logging.info(f'Build blocks success')
+    t1 = time.time()
+    check_area = np.sum(gdd['gadm_blocks']['geometry'].to_crs(3395).area)/np.sum(gdd['gadm_gpd'][gdd['gadm_gpd'][gdd['gadm_col']] == gdd['gadm']]['geometry'].to_crs(3395).area)
+    logging.info(f"Subdivide GADM into blocks: {round(t1-t0,5)}")
+    logging.info(f"gadm_blocks area / gadm_gpd area: {check_area}")
+    logging.info(f"gadm_blocks.shape: {gdd['gadm_blocks'].shape}")
+    with open(Path(os.path.dirname(Path(gdd['log_file']))) / '_log_block_integrity.txt', 'a') as f: 
+        with redirect_stdout(f):
+            print(f'{gdd['gadm']}, {round(check_area,5)}')
+
+    t0 = time.time()
+    building_file = list(filter(re.compile(str("%s" % gdd['gadm'] +'.geojson')).findall, sorted(gdd['building_file_list'])))[0]
+    building_gpd = gpd.read_file(Path(building_parent_dir) / country_code / building_file).to_crs(4326) 
+    t1 = time.time()
+    logging.info(f"Building file read: {round(t1-t0,5)}")
+    logging.info(f"building_gpd.shape: {gdd['building_gpd'].shape}")
+    
+    t0 = time.time()
+    block_coded_buildings = kblock.index_buildings(gadm_block_data = gdd['gadm_blocks'], bldg_data = gdd['building_gpd'])
+    t1 = time.time()
+    logging.info(f"Index building time: {round(t1-t0,5)}")
+    logging.info(f"block_coded_buildings.shape: {block_coded_buildings.shape}")
+    
+    block_coded_buildings = block_coded_buildings.to_crs(3395)
+    gadm_blocks = gdd['gadm_blocks'].to_crs(3395)
+    #osm_highways = pygeos.from_shapely(osm_gpd[osm_gpd['highway'].notnull()]['geometry'].to_crs(epsg=3395))
+    osm_highways = kblock.from_shapely_srid(geometry = gdd['osm_gpd'][gdd['osm_gpd']['highway'].notnull()].to_crs(3395), srid = 3395) 
+    logging.info(f"osm_highways.shape: {gdd['osm_gpd'][gdd['osm_gpd']['highway'].notnull()].shape}")
+
+    # Iterate through blocks:
+    logging.info("Compute k")
+    block_metrics = []
+    for x in gadm_blocks_list: 
+        t0 = time.time()
+        with open(Path(os.path.dirname(Path(gdd['log_file']))) / '_log_street_buffer.txt', 'a') as f: 
+            with redirect_stdout(f):
+                df_k = kblock.compute_k(block_data = gadm_blocks,
+                                        bldg_data = block_coded_buildings, 
+                                        block_col = 'block_id', 
+                                        block_id = x,
+                                        street_linestrings = osm_highways,
+                                        buffer_streets=True)
+        block_metrics.append(df_k)
+        t1 = time.time()
+        logging.info(f"block_id: {x} - {round(t1-t0,5)}")
+
+    k_output = k_init.append(block_metrics, ignore_index=True)
+    t0 = time.time()
+    kblock_w_pop = block_summary.make_summary(k_output, gdd['population_raster_path'], building_gpd, log_file)
+    t1 = time.time()
+    logging.info(f"Block statistics time: {round(t1-t0,5)}")
+    kblock_w_pop.to_file(Path(output_dir_country) / str('kblock_'+gadm+'.geojson'), driver='GeoJSON')
+
 
 def setup(args=None):
     parser = argparse.ArgumentParser(description='kblock computation')
