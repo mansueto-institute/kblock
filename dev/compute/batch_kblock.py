@@ -121,13 +121,6 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
     logging.info(f"Units in GADM file not found in building directory: {gadm_list_no_match}")
     logging.info(f"Units in building directory not found in GADM file: {building_file_list_no_match}")
 
-    # Initialize GeoDataFrame
-    k_init = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 
-        'block_area': pd.Series(dtype='float'), 'building_area': pd.Series(dtype='float'), 
-        'building_count': pd.Series(dtype='int'), 'building_layers': pd.Series(dtype='object'),  'k_complexity': pd.Series(dtype='int'), 
-        'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
-    logging.info(f'k_init: {k_init}')
-
     # Iterate through GADMs:
     gadm_data_list = [{'gadm': i, 'gadm_gpd': gadm_gpd, 'osm_pygeos': osm_pygeos, 'gadm_column': gadm_col,
                        'log_file': log_file, 'building_parent_dir': building_parent_dir,
@@ -142,6 +135,14 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
 
 
 def main_helper(gdd: dict) -> None:
+    # Initialize GeoDataFrame
+    k_init = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 
+        'block_area': pd.Series(dtype='float'), 'building_area': pd.Series(dtype='float'), 
+        'building_count': pd.Series(dtype='int'), 'building_layers': pd.Series(dtype='object'),  'k_complexity': pd.Series(dtype='int'), 
+        'block_pop_ls': pd.Series(dtype='float'), 'block_pop_wp': pd.Series(dtype='float'),
+        'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
+    logging.info(f'k_init: {k_init}')
+
     logging.getLogger().setLevel("DEBUG")
     logging.basicConfig(filename=Path(gdd['log_file']), format='%(asctime)s:%(message)s: ', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
     logging.info(f"Starting: {gdd['country_code']}")
@@ -197,12 +198,13 @@ def main_helper(gdd: dict) -> None:
         t1 = time.time()
         logging.info(f"block_id: {x} - {round(t1-t0,5)}")
 
-    k_output = k_init.append(block_metrics, ignore_index=True)
     t0 = time.time()
-    kblock_w_pop = block_summary.make_summary(k_output, gdd['population_raster_path'], building_gpd, gdd['log_file'])
+    kblock_w_pop = block_summary.make_summary(block_metrics, gdd['population_raster_path'], building_gpd, gdd['log_file'])
     t1 = time.time()
+    kblock_output_w_pop = k_init.append(kblock_w_pop, ignore_index=True)
     logging.info(f"Block statistics time: {round(t1-t0,5)}")
     kblock_w_pop.to_file(Path(output_dir_country) / str('kblock_'+gdd['gadm']+'.geojson'), driver='GeoJSON')
+
 
 
 def setup(args=None):
