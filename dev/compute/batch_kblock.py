@@ -129,7 +129,7 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
     logging.info(f'k_init: {k_init}')
 
     # Iterate through GADMs:
-    gadm_data_list = [{'gadm': i, 'gadm_gpd': gadm_gpd, 'osm_data': osm_pygeos, 'gadm_column': gadm_col,
+    gadm_data_list = [{'gadm': i, 'gadm_gpd': gadm_gpd, 'osm_pygeos': osm_pygeos, 'gadm_column': gadm_col,
                        'log_file': log_file, 'building_parent_dir': building_parent_dir,
                        'country_code': country_code, 'building_file_list': building_file_list,
                        'output_dir_country': output_dir_country, 'osm_gpd': osm_gpd,
