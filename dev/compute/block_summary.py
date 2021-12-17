@@ -161,6 +161,7 @@ def make_superblock_summary(bldg_pop_data_ls: gpd.GeoDataFrame,
 
     bldg_pop_ls = set_dtypes(bldg_pop_ls, block_data)
     bldg_pop = add_block_pop(bldg_pop_ls, bldg_pop_wp)
+    print(bldg_pop.columns.tolist())
     bldg_pop['block_pop_ls'] = bldg_pop['block_pop_ls'].apply(lambda x: np.nan if x == 0 else x)
     bldg_pop['block_pop_wp'] = bldg_pop['block_pop_wp'].apply(lambda x: np.nan if x == 0 else x)
 

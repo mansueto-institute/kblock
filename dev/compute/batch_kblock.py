@@ -138,8 +138,7 @@ def main_helper(gdd: dict) -> None:
     # Initialize GeoDataFrame
     k_init = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 
         'block_area': pd.Series(dtype='float'), 'building_area': pd.Series(dtype='float'), 
-        'building_count': pd.Series(dtype='int'), 'building_layers': pd.Series(dtype='object'),  'k_complexity': pd.Series(dtype='int'), 
-        'block_pop_ls': pd.Series(dtype='float'), 'block_pop_wp': pd.Series(dtype='float'),
+        'building_count': pd.Series(dtype='int'), 'building_layers': pd.Series(dtype='object'),  'k_complexity': pd.Series(dtype='int'),
         'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
     logging.info(f'k_init: {k_init}')
 
