@@ -198,12 +198,12 @@ def main_helper(gdd: dict) -> None:
         t1 = time.time()
         logging.info(f"block_id: {x} - {round(t1-t0,5)}")
 
+    k_output = k_init.append(block_metrics, ignore_index = True)
     t0 = time.time()
-    kblock_w_pop = block_summary.make_summary(block_metrics, gdd['population_raster_path'], building_gpd, gdd['log_file'])
+    k_output_w_pop = block_summary.make_summary(k_output, gdd['population_raster_path'], building_gpd, gdd['log_file'])
     t1 = time.time()
-    kblock_output_w_pop = k_init.append(kblock_w_pop, ignore_index=True)
     logging.info(f"Block statistics time: {round(t1-t0,5)}")
-    kblock_w_pop.to_file(Path(output_dir_country) / str('kblock_'+gdd['gadm']+'.geojson'), driver='GeoJSON')
+    k_output_w_pop.to_file(Path(output_dir_country) / str('kblock_'+gdd['gadm']+'.geojson'), driver='GeoJSON')
 
 
 
