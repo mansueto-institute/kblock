@@ -202,7 +202,7 @@ def main_helper(gdd: dict) -> None:
     k_output_w_pop = block_summary.make_summary(k_output, gdd['population_raster_path'], building_gpd, gdd['log_file'])
     t1 = time.time()
     logging.info(f"Block statistics time: {round(t1-t0,5)}")
-    k_output_w_pop.to_file(Path(output_dir_country) / str('kblock_'+gdd['gadm']+'.geojson'), driver='GeoJSON')
+    k_output_w_pop.to_file(Path(gdd['output_dir_country']) / str('kblock_'+gdd['gadm']+'.geojson'), driver='GeoJSON')
 
 
 
