@@ -129,7 +129,7 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
                        'population_raster_path': population_raster_path} for i in gadm_list]
     logging.info(f'Running over GADMs: {gadm_list}')
 
-    with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+    with multiprocessing.Pool(4) as pool:
         pool.map(main_helper, gadm_data_list)
     logging.info('Finished')
 
