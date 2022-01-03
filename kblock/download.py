@@ -27,6 +27,7 @@ def get_osm_lines(country_code: str, download_dir: Union[str, Path]) -> gpd.GeoD
     Download *.osm.pbf file from Geofabrik and parse into linestring geometries
     Args:
         country_code: three-letter country code following ISO 3166-1 alpha-3 format
+        download_dir: folder containing downloaded .osm.pbf files
     Returns:
         GeoDataFrame for specific country
     """
@@ -38,7 +39,7 @@ def get_osm_lines(country_code: str, download_dir: Union[str, Path]) -> gpd.GeoD
     if len(finished_files) == 0:
         pyrosm.data.get_data(dataset = geofabrik_name, update = True, directory = download_dir)  
     #print(os.listdir(download_dir))
-    extract = pyrosm.OSM(str(download_dir + f'/{geofabrik_name}-latest.osm.pbf'))
+    extract = pyrosm.OSM(str( str(download_dir) + f'/{geofabrik_name}-latest.osm.pbf'))
     
     osm_data = gpd.GeoDataFrame({'id': pd.Series(dtype='int64'), 'timestamp': pd.Series(dtype='int64'), 
                                  'version': pd.Series(dtype='int8'), 'osm_type': pd.Series(dtype='object'), 
@@ -111,11 +112,12 @@ def get_gadm_data(country_code: str, download_dir: Union[str, Path]) -> gpd.GeoD
     Download most detailed administrative boundaries from GADM.org
     Args:
         country_code: three-letter country code following ISO 3166-1 alpha-3 format
+        download_dir: folder containing downloaded GADM shapefiles
     Returns:
         GeoDataFrame for a specific country
     """
     dest_exist = list(filter(re.compile(f"{country_code}").match, sorted(list(os.listdir(Path(download_dir))))))
-    if dest_exist[0] == country_code:
+    if len(dest_exist) == 0:
         gadm_url = f"https://biogeo.ucdavis.edu/data/gadm3.6/shp/gadm36_{country_code}_shp.zip"
         #temp_dir = tempfile.TemporaryDirectory()
         results = requests.get(URL(gadm_url))
