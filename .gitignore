@@ -1,1 +1,6 @@
 dev/__pycache__/
+.vscode
+.DS_Store
+__pycache__/
+.*
+!.gitignore

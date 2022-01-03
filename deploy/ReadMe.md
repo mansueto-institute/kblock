@@ -1,12 +1,29 @@
 ### Build on Midway
 ```
 module load python/anaconda-2021.05
-conda create --name py395_pygeos python=3.9.5 --channel conda-forge
-source activate py395_pygeos
-conda install pygeos=0.11.1 --channel conda-forge --yes
-conda install geopandas=0.10.2 --channel conda-forge --yes
-conda install pyarrow --channel conda-forge --yes
-conda install dask --channel conda-forge --yes
+conda create --name build_block_env python=3.9.7 --yes
+source activate build_block_env
+conda install -c conda-forge pygeos=0.12.0 --yes
+conda install -c conda-forge geopandas=0.10.2 --yes
+conda install -c conda-forge cykhash=1.0.2 --yes
+conda install -c conda-forge pyrosm=0.6.1 --yes
+conda install -c conda-forge urlpath --yes
+conda install -c conda-forge pyarrow --yes
+conda install -c conda-forge dask --yes
+conda install -c conda-forge dask-geopandas --yes
+```
+
+### Compute on Midway
+```
+module load python/anaconda-2021.05
+conda create --name kcompute_env python=3.9.7 --yes
+source activate kcompute_env
+conda install -c conda-forge pygeos=0.12.0 --yes
+conda install -c conda-forge geopandas=0.10.2 --yes
+conda install -c conda-forge urlpath --yes
+conda install -c conda-forge pyarrow --yes
+conda install -c conda-forge dask --yes
+conda install -c conda-forge dask-geopandas --yes
 ```
 
 ### Local deploy
