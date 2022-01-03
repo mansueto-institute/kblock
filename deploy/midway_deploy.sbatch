@@ -12,8 +12,8 @@
 #SBATCH --time=16:00:00
 #SBATCH --account=pi-bettencourt
 
-country_list=(AGO BDI BEN BFA BWA CAF CIV CMR COD COG COM CPV DJI ERI ESH ETH GAB GHA GIN GMB GNB GNQ KEN LBR LSO MDG MLI MOZ MRT MUS MWI NAM NER NGA RWA SDN SEN SLE SOM SSD STP SWZ SYC TCD TGO TZA UGA ZAF ZMB ZWE)
- 
+country_list=(STP SYC GNQ COM MUS DJI GNB CPV ERI GAB MRT SWZ COG LBR RWA SLE BDI BEN TGO NAM CIV NER AGO BFA SDN GHA GMB TCD CAF ETH BWA SOM SSD GIN MWI LSO MLI ZWE KEN MOZ ESH CMR ZMB MDG ZAF UGA COD NGA TZA SEN)
+
 log_file_arg=/project2/bettencourt/mnp/analytics/deployments/log_build_blocks.log
 country_chunk_arg=${country_list[@]}
 osm_dir_arg=/project2/bettencourt/mnp/analytics/data/geofabrik
