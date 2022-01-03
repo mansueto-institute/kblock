@@ -20,4 +20,4 @@ osm_dir_arg=/project2/bettencourt/mnp/analytics/data/geofabrik
 gadm_dir_arg=/project2/bettencourt/mnp/analytics/data/gadm
 output_dir_arg=/project2/bettencourt/mnp/analytics/outputs
 
-python batch_etl.py --log_file $log_file_arg  --country_chunk $country_chunk_arg --osm_dir $osm_dir_arg --gadm_dir_arg $gadm_dir_arg  --output_dir $output_dir_arg
+python batch_etl.py --log_file $log_file_arg  --country_chunk $country_chunk_arg --osm_dir $osm_dir_arg --gadm_dir $gadm_dir_arg  --output_dir $output_dir_arg
