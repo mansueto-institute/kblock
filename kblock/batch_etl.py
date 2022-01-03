@@ -58,7 +58,7 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         
     # Subset to countries with no existing output file
     if output_country_list:
-        country_list = [x for x in country_list if x not in set(output_country_list)]
+        country_list = [x for x in country_chunk if x in set(country_list)]
     logging.info(f"Remaining countries: {country_list}")
     logging.info(f"Generate block geometries")
 
