@@ -4,7 +4,7 @@
 #SBATCH --partition=build
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --mem=32000
+#SBATCH --mem=54000
 #SBATCH --output=/project2/bettencourt/mnp/analytics/deployments/build_block_job.out
 #SBATCH --error=/project2/bettencourt/mnp/analytics/deployments/build_block_job.err
 #SBATCH --mail-type=ALL
