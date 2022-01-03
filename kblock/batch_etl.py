@@ -40,8 +40,6 @@ def main(log_file: Path, country_chunk: list, output_dir: Path):
     Path(block_dir).mkdir(parents=True, exist_ok=True)
     street_dir =  str(output_dir) + '/streets'
     Path(street_dir).mkdir(parents=True, exist_ok=True)
-    osm_dir =  str(output_dir) + '/osm'
-    Path(osm_dir).mkdir(parents=True, exist_ok=True)
     logging.info(f"block_dir: {block_dir}")
     logging.info(f"street_dir: {street_dir}")
 
@@ -78,7 +76,7 @@ def main(log_file: Path, country_chunk: list, output_dir: Path):
     
         # Download GADM files
         t0 = time.time()
-        gadm_gpd = download.get_gadm_data(country_code = country_code) 
+        gadm_gpd = download.get_gadm_data(country_code = country_code, download_dir = gadm_dir) 
         gadm_col = max(list(filter(re.compile("GID_*").match, list(gadm_gpd.columns))))
         t1 = time.time()
         logging.info(f"Download GADM: gadm_gpd: {gadm_gpd.shape}, gadm_col: {gadm_col}, {mem_profile()}, {str(round(t1-t0,3))} seconds")
@@ -145,6 +143,8 @@ def setup(args=None):
     parser = argparse.ArgumentParser(description='Download and build blocks.')
     parser.add_argument('--log_file', required=False, type=Path, dest="log_file", help="Path to write log file") 
     parser.add_argument('--country_chunk', required=False, type=str, dest="country_chunk", nargs='+', help="List of country codes following ISO 3166-1 alpha-3 format")
+    parser.add_argument('--osm_dir', required=True, type=Path, dest="osm_dir", help="OSM directory")
+    parser.add_argument('--gadm_dir', required=True, type=Path, dest="gadm_dir", help="GADM directory")
     parser.add_argument('--output_dir', required=True, type=Path, dest="output_dir", help="Output directory")
     return parser.parse_args(args)
 

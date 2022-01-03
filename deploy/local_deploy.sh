@@ -11,7 +11,9 @@
 #conda install -c conda-forge dask --yes
 #conda install -c conda-forge dask-geopandas --yes
 
-country_list=(SYC SLE COM)
+#country_list=(SYC SLE COM)
+
+country_list=(AGO BDI BEN BFA BWA CAF CIV CMR COD COG COM CPV DJI ERI ESH ETH GAB GHA GIN GMB GNB GNQ KEN LBR LSO MDG MLI MOZ MRT MUS MWI NAM NER NGA RWA SDN SEN SLE SOM SSD STP SWZ SYC TCD TGO TZA UGA ZAF ZMB ZWE)
 
 log_file_arg=/Users/nm/Desktop/output/log_output.log
 country_chunk_arg=${country_list[@]}
