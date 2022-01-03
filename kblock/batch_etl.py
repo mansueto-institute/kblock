@@ -40,6 +40,8 @@ def main(log_file: Path, country_chunk: list, output_dir: Path):
     Path(block_dir).mkdir(parents=True, exist_ok=True)
     street_dir =  str(output_dir) + '/streets'
     Path(street_dir).mkdir(parents=True, exist_ok=True)
+    osm_dir =  str(output_dir) + '/osm'
+    Path(osm_dir).mkdir(parents=True, exist_ok=True)
     logging.info(f"block_dir: {block_dir}")
     logging.info(f"street_dir: {street_dir}")
 
@@ -68,7 +70,7 @@ def main(log_file: Path, country_chunk: list, output_dir: Path):
         
         # Download OSM files
         t0 = time.time()
-        osm_gpd = download.get_osm_lines(country_code = country_code) 
+        osm_gpd = download.get_osm_lines(country_code = country_code, download_dir = osm_dir) 
         osm_gpd = osm_gpd.explode(ignore_index = True)
         osm_pygeos = prepare.from_shapely_srid(geometry = osm_gpd, srid = 4326) 
         t1 = time.time()
