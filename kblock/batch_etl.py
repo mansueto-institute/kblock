@@ -27,7 +27,7 @@ def mem_profile() -> str:
     mem_use = str(round(100 - psutil.virtual_memory().percent,4))+'% of '+str(round(psutil.virtual_memory().total/1e+9,3))+' GB RAM'
     return mem_use
 
-def main(log_file: Path, country_chunk: list, output_dir: Path):
+def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, output_dir: Path):
 
     logging.getLogger().setLevel(logging.INFO)
     logging.basicConfig(filename=Path(log_file), format='%(asctime)s:%(message)s: ', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
@@ -150,3 +150,4 @@ def setup(args=None):
 
 if __name__ == "__main__":
     main(**vars(setup()))
+    
