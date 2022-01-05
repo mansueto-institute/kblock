@@ -21,6 +21,9 @@ mkdir -p $outpath
 mkdir -p $outpath/osm/pbf
 mkdir -p $outpath/gadm/shp
 
+geofabrik_list=(angola burundi benin burkina-faso botswana central-african-republic ivory-coast cameroon congo-democratic-republic congo-brazzaville comores cape-verde djibouti eritrea morocco ethiopia gabon ghana guinea senegal-and-gambia guinea-bissau equatorial-guinea kenya liberia lesotho madagascar mali mozambique mauritania mauritius malawi namibia niger nigeria rwanda sudan senegal-and-gambia sierra-leone somalia south-sudan sao-tome-and-principe swaziland seychelles chad togo tanzania uganda south-africa zambia zimbabwe)
+gadm_list=(AGO BDI BEN BFA BWA CAF CIV CMR COD COG COM CPV DJI ERI ESH ETH GAB GHA GIN GMB GNB GNQ KEN LBR LSO MDG MLI MOZ MRT MUS MWI NAM NER NGA RWA SDN SEN SLE SOM SSD STP SWZ SYC TCD TGO TZA UGA ZAF ZMB ZWE)
+
 # Create array of countries that haven't been downloaded from https://www.geofabrik.de/
 osm_finished=()
 shopt -s nullglob
@@ -30,8 +33,6 @@ done
 osm_finished=("${osm_finished[@]//$outpath\/osm\/pbf\//}")
 osm_finished=("${osm_finished[@]//-latest.osm.pbf/}")
 echo "${osm_finished[@]}"
-
-geofabrik_list=(angola burundi benin burkina-faso botswana central-african-republic ivory-coast cameroon congo-democratic-republic congo-brazzaville comores cape-verde djibouti eritrea morocco ethiopia gabon ghana guinea senegal-and-gambia guinea-bissau equatorial-guinea kenya liberia lesotho madagascar mali mozambique mauritania mauritius malawi namibia niger nigeria rwanda sudan senegal-and-gambia sierra-leone somalia south-sudan sao-tome-and-principe swaziland seychelles chad togo tanzania uganda south-africa zambia zimbabwe)
 
 residual_osm_list=()
 residual_osm_list=(`echo ${geofabrik_list[@]} ${osm_finished[@]} | tr ' ' '\n' | sort | uniq -u`)
@@ -51,8 +52,6 @@ for i in $outpath/gadm/shp/*; do
 done
 gadm_finished=("${gadm_finished[@]//$outpath\/gadm\/shp\//}")
 echo "${gadm_finished[@]}"
-
-gadm_list=(AGO BDI BEN BFA BWA CAF CIV CMR COD COG COM CPV DJI ERI ESH ETH GAB GHA GIN GMB GNB GNQ KEN LBR LSO MDG MLI MOZ MRT MUS MWI NAM NER NGA RWA SDN SEN SLE SOM SSD STP SWZ SYC TCD TGO TZA UGA ZAF ZMB ZWE)
 
 residual_gadm_list=()
 residual_gadm_list=(`echo ${gadm_list[@]} ${gadm_finished[@]} | tr ' ' '\n' | sort | uniq -u`)
