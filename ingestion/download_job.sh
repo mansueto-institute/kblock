@@ -16,6 +16,12 @@ while getopts ":o:" opt; do
   esac
 done
 
+function arraydiff() {
+  awk 'BEGIN{RS=ORS=" "}
+       {NR==FNR?a[$0]++:a[$0]--}
+       END{for(k in a)if(a[k])print k}' <(echo -n "${!1}") <(echo -n "${!2}")
+}
+
 cwd=$(pwd)
 mkdir -p $outpath
 mkdir -p $outpath/osm/pbf
@@ -33,7 +39,7 @@ echo "${osm_finished[@]}"
 geofabrik_list=(angola burundi benin burkina-faso botswana central-african-republic ivory-coast cameroon congo-democratic-republic congo-brazzaville comores cape-verde djibouti eritrea morocco ethiopia gabon ghana guinea senegal-and-gambia guinea-bissau equatorial-guinea kenya liberia lesotho madagascar mali mozambique mauritania mauritius malawi namibia niger nigeria rwanda sudan senegal-and-gambia sierra-leone somalia south-sudan sao-tome-and-principe swaziland seychelles chad togo tanzania uganda south-africa zambia zimbabwe)
 
 residual_osm_list=()
-residual_osm_list=( $(printf "%s\n" "${geofabrik_list[@]}" "${osm_finished[@]}" "${osm_finished[@]}" | sort | uniq -u) )
+residual_osm_list=($(arraydiff geofabrik_list[@] osm_finished[@]))
 echo "${residual_osm_list[@]}"
 
 for country in ${residual_osm_list[@]}; do
@@ -53,9 +59,13 @@ echo "${gadm_finished[@]}"
 gadm_list=(AGO BDI BEN BFA BWA CAF CIV CMR COD COG COM CPV DJI ERI ESH ETH GAB GHA GIN GMB GNB GNQ KEN LBR LSO MDG MLI MOZ MRT MUS MWI NAM NER NGA RWA SDN SEN SLE SOM SSD STP SWZ SYC TCD TGO TZA UGA ZAF ZMB ZWE)
 
 residual_gadm_list=()
-residual_gamd_list=( $(printf "%s\n" "${gadm_list[@]}" "${gadm_finished[@]}" "${gadm_finished[@]}" | sort | uniq -u) )
+residual_gadm_list=($(arraydiff gadm_list[@] gadm_finished[@]))
 echo "${residual_gadm_list[@]}"
 
 gadm_list_arg=${residual_gadm_list[@]}
+output_dir_arg=$outpath/gadm
 
-python $cwd/download_gadm.py --country_chunk $gadm_list_arg --output_dir $outpath/gadm
+python $cwd/download_gadm.py --country_chunk $gadm_list_arg --output_dir $output_dir_arg
+
+
+
