@@ -17,7 +17,7 @@ conda install -c conda-forge urlpath --yes
 
 ### Steps to download OSM linestrings and GADMs boundaries and write to local directory
 
-#### Activate environment, clone repo, cd into folder, create output directory
+#### Activate environment, clone repo, cd into repo, make output directory
 ```
 source activate geo_download_env
 cd /users/repos/
