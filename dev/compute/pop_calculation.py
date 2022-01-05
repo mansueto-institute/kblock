@@ -159,9 +159,9 @@ def make_superblock_summary(bldg_pop_data_ls: gpd.GeoDataFrame,
     if 'block_id' not in bldg_pop_wp.columns:
          bldg_pop_wp = add_block_id(bldg_pop_wp, block_data)
 
+
     bldg_pop_ls = set_dtypes(bldg_pop_ls, block_data)
     bldg_pop = add_block_pop(bldg_pop_ls, bldg_pop_wp)
-    print(bldg_pop.columns.tolist())
     bldg_pop['block_pop_ls'] = bldg_pop['block_pop_ls'].apply(lambda x: np.nan if x == 0 else x)
     bldg_pop['block_pop_wp'] = bldg_pop['block_pop_wp'].apply(lambda x: np.nan if x == 0 else x)
 
@@ -193,8 +193,9 @@ def load_gadm_file(gadm_dir: str) -> gpd.GeoDataFrame:
 
 
 def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
-                 landscan_path: Union[str, Path],
                  superblock_buildings: Union[str, Path, gpd.GeoDataFrame],
+                 landscan_path: Union[str, Path],
+                 superblock_path: Union[str, Path],
                  log_file: Union[str, Path]
                  ) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """
@@ -228,7 +229,6 @@ def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
     # (2) Allocate Landscan
     country_code = superblock['block_id'][0].split('.')[0]
     gadm_list = list(set(superblock['gadm_code']))
-    world_pop_path = '/project2/bettencourt/mnp/analytics/data/population/WorldPop_tifs/' + country_code +'.tif'
     _, superblock_ls = extract_aoi_data_from_raster(superblock, str(landscan_path), save_geojson=False, save_tif=False)
     _, superblock_wp = extract_aoi_data_from_raster(superblock, world_pop_path, save_geojson=False, save_tif=False)
     ### fiona error ###
@@ -254,6 +254,9 @@ def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
        	with redirect_stdout(f):
        	    print(f"{len(bldg_pop_alloc_ls[bldg_pop_alloc_ls['geometry'].isna()])} null geometries for LandScan")
             print(f"{len(bldg_pop_alloc_wp[bldg_pop_alloc_wp['geometry'].isna()])} null geometries for WorldPop")
+
+    if 'block_area' is not in superblock.columns.tolist():
+        superblock['block_area'] = superblock.geometry.area
 
     # (2) Now assemble the other data
     superblock_bldg_summary = make_superblock_summary(bldg_pop_alloc_ls, bldg_pop_alloc_wp, superblock)

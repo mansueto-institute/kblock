@@ -107,7 +107,7 @@ def raster_to_geodataframe(raster_data: np.ndarray,
         for w in range(data_w):
             # Convert to the coord sys of the raster_io dataset
             abs_h = h + window.row_off 
-            abs_w = w + window.col_off 
+            abs_w = w + window.col_off
 
             # And use its xy method now
             # abs_x1, abs_y1 = raster_io.xy(abs_h, abs_w)

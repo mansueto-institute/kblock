@@ -20,7 +20,7 @@ from pathlib import Path
 from contextlib import redirect_stderr, redirect_stdout
 import logging
 import warnings
-import block_summary
+import pop_calculation
 import multiprocessing
 
 def gadm_dir_to_path(gadm_dir: Union[str, Path]) -> str:
@@ -126,7 +126,7 @@ def main(log_file: Path, country_code: str, country_code_file: Path, gadm_parent
                        'log_file': log_file, 'building_parent_dir': building_parent_dir,
                        'country_code': country_code, 'building_file_list': building_file_list,
                        'output_dir_country': output_dir_country, 'osm_gpd': osm_gpd,
-                       'population_raster_path': population_raster_path} for i in gadm_list]
+                       'population_raster_path': population_raster_path, 'worldpop_raster_path': worldpop_raster_path} for i in gadm_list]
     logging.info(f'Running over GADMs: {gadm_list}')
 
     with multiprocessing.Pool(4) as pool:
@@ -199,7 +199,7 @@ def main_helper(gdd: dict) -> None:
 
     k_output = k_init.append(block_metrics, ignore_index = True)
     t0 = time.time()
-    k_output_w_pop = block_summary.make_summary(k_output, gdd['population_raster_path'], building_gpd, gdd['log_file'])
+    k_output_w_pop = pop_calculation.make_summary(k_output, building_gpd, gdd['landscan_raster_path'], gdd['worldpop_raster_path'], gdd['log_file'])
     t1 = time.time()
     logging.info(f"Block statistics time: {round(t1-t0,5)}")
     k_output_w_pop.to_file(Path(gdd['output_dir_country']) / str('kblock_'+gdd['gadm']+'.geojson'), driver='GeoJSON')
@@ -215,7 +215,8 @@ def setup(args=None):
     parser.add_argument('--gadm_parent_dir', required=True, type=Path, dest="gadm_parent_dir", help="GADM parent directory")
     parser.add_argument('--streets_parent_dir', required=True, type=Path, dest="streets_parent_dir", help="list of GADM codes")
     parser.add_argument('--building_parent_dir', required=True, type=Path, dest="building_parent_dir", help="building file parent directory")
-    parser.add_argument('--population_raster_path', required=True, type=Path, dest="population_raster_path", help="Filepath for population raster data")
+    parser.add_argument('--landscan_raster_path', required=True, type=Path, dest="landscan_raster_path", help="Filepath for LandScan raster data")
+    parser.add_argument('--worldpop_raster_path', required=True, type=Path, dest="worldpop_raster_path", help="Filepath for WorldPop raster data")
     parser.add_argument('--output_dir', required=True, type=Path, dest="output_dir", help="output directory")
     return parser.parse_args(args)
 
