@@ -26,6 +26,7 @@ cd /users/repos/kblock/ingestion
 mkdir -p /users/downloads/folder
 ```
 #### Deploy download job (pass in output directory with -o argument)
+> **Caution:** Running this script will download LOTS of data for all countries in the `gadm_list=()` in the `geofabrik_list=()` in `download_job.sh`.
 ```
 bash download_job.sh -o /users/downloads/folder
 ```
