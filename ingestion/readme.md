@@ -1,6 +1,6 @@
 # Data Ingestion 
 
-## Dependencies for download script
+## Dependencies for download script (MacOS)
 #### OSM extraction setup (requires homebrew at https://brew.sh/)
 ```
 brew install wget
