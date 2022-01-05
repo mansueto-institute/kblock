@@ -16,12 +16,17 @@ conda install -c conda-forge urlpath --yes
 ```
 
 ### Steps to download OSM linestrings and GADMs boundaries and write to local directory
+
+#### Activate environment, clone repo, cd into folder, create output directory
 ```
 source activate geo_download_env
 cd /users/repos/
 git clone git@github.com:mansueto-institute/kblock.git
 cd /users/repos/kblock/ingestion
 mkdir -p /users/downloads/folder
+```
+#### Deploy download job (pass in output directory with -o argument)
+```
 bash download_job.sh -o /users/downloads/folder
 ```
 
