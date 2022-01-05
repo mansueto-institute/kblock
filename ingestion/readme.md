@@ -1,6 +1,6 @@
-## Data Ingestion 
+# Data Ingestion 
 
-### Dependencies for download script
+## Dependencies for download script
 #### OSM extraction setup (requires homebrew at https://brew.sh/)
 ```
 brew install wget
@@ -15,7 +15,7 @@ conda install -c conda-forge geopandas=0.10.2 --yes
 conda install -c conda-forge urlpath --yes
 ```
 
-### Steps to download OSM linestrings and GADMs boundaries and write to local directory
+## Steps to download OSM linestrings and GADMs boundaries and write to local directory
 
 #### Activate environment, clone repo, cd into repo, make output directory
 ```
