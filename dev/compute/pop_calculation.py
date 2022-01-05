@@ -195,7 +195,7 @@ def load_gadm_file(gadm_dir: str) -> gpd.GeoDataFrame:
 def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
                  superblock_buildings: Union[str, Path, gpd.GeoDataFrame],
                  landscan_path: Union[str, Path],
-                 superblock_path: Union[str, Path],
+                 worldpop_path: Union[str, Path],
                  log_file: Union[str, Path]
                  ) -> Tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """
@@ -230,7 +230,7 @@ def make_summary(superblock: Union[str, Path, gpd.GeoDataFrame],
     country_code = superblock['block_id'][0].split('.')[0]
     gadm_list = list(set(superblock['gadm_code']))
     _, superblock_ls = extract_aoi_data_from_raster(superblock, str(landscan_path), save_geojson=False, save_tif=False)
-    _, superblock_wp = extract_aoi_data_from_raster(superblock, world_pop_path, save_geojson=False, save_tif=False)
+    _, superblock_wp = extract_aoi_data_from_raster(superblock, worldpop_path, save_geojson=False, save_tif=False)
     ### fiona error ###
     if superblock_buildings is None:
         summary_out_path = Path(summary_out_path)
