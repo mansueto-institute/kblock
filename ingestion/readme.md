@@ -1,11 +1,11 @@
-### Dependencies for download script
+## Data Ingestion 
 
+### Dependencies for download script
 #### OSM extraction setup (requires homebrew at https://brew.sh/)
 ```
 brew install wget
 brew install osmium-tool
 ```
-
 #### GADM setup Python script
 ```
 conda create --name geo_download_env python=3.9.7 --yes
@@ -15,12 +15,13 @@ conda install -c conda-forge geopandas=0.10.2 --yes
 conda install -c conda-forge urlpath --yes
 ```
 
-### Steps to run download script and write to local directory
+### Steps to download OSM linestrings and GADMs boundaries and write to local directory
 ```
 cd /users/repos/
 git clone git@github.com:mansueto-institute/kblock.git
 cd /users/repos/kblock/ingestion
-bash download_job.sh -output_dir=/users/downloads
+mkdir -p /users/downloads/folder
+bash download_job.sh -o /users/downloads/folder
 ```
 
 ### Country array arguments in `download_job.sh`
