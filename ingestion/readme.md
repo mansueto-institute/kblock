@@ -6,7 +6,7 @@
 brew install wget
 brew install osmium-tool
 ```
-#### GADM setup Python script
+#### Python environment setup (requires miniconda at https://docs.conda.io/en/latest/miniconda.html)
 ```
 conda create --name geo_download_env python=3.9.7 --yes
 source activate geo_download_env
