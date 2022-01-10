@@ -9,7 +9,7 @@
 #SBATCH --error=/project2/bettencourt/mnp/production/jobs/build_block_job.err
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=nmarchio@uchicago.edu
-#SBATCH --time=16:00:00
+#SBATCH --time=24:00:00
 #SBATCH --account=pi-bettencourt
 
 
