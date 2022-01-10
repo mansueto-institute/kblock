@@ -1,7 +1,7 @@
 
 ### PyrOSM Environment 
 
-Due to performance issues the [PyrOSM](https://pyrosm.readthedocs.io/en/latest/) library utilized in the download.py module is not recommended for large countries or large scale data processing.
+Due to performance issues the [PyrOSM](https://pyrosm.readthedocs.io/en/latest/) library utilized in the `download.py` module is not recommended for large countries or large scale data processing.
 However, this may be convenient for local development use cases. 
 
 ```
