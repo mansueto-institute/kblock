@@ -22,12 +22,12 @@ from pyrosm.data import sources
 from pyrosm import OSM, get_data
 from pyrosm.config import Conf
 
+
 def get_osm_lines(country_code: str, download_dir: Union[str, Path]) -> gpd.GeoDataFrame:
     """
     Download *.osm.pbf file from Geofabrik and parse into linestring geometries
     Args:
         country_code: three-letter country code following ISO 3166-1 alpha-3 format
-        download_dir: folder containing downloaded .osm.pbf files
     Returns:
         GeoDataFrame for specific country
     """
@@ -39,7 +39,7 @@ def get_osm_lines(country_code: str, download_dir: Union[str, Path]) -> gpd.GeoD
     if len(finished_files) == 0:
         pyrosm.data.get_data(dataset = geofabrik_name, update = True, directory = download_dir)  
     #print(os.listdir(download_dir))
-    extract = pyrosm.OSM(str( str(download_dir) + f'/{geofabrik_name}-latest.osm.pbf'))
+    extract = pyrosm.OSM(str(download_dir + f'/{geofabrik_name}-latest.osm.pbf'))
     
     osm_data = gpd.GeoDataFrame({'id': pd.Series(dtype='int64'), 'timestamp': pd.Series(dtype='int64'), 
                                  'version': pd.Series(dtype='int8'), 'osm_type': pd.Series(dtype='object'), 
@@ -47,41 +47,46 @@ def get_osm_lines(country_code: str, download_dir: Union[str, Path]) -> gpd.GeoD
                                  'natural': pd.Series(dtype='object'), 'waterway': pd.Series(dtype='object'),  
                                  'railway': pd.Series(dtype='object'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
     
-    osm_network = extract.get_network(network_type='all')
-    if osm_network is not None:
-        osm_network["geometry_types"] = osm_network.geometry.geom_type
-        osm_network_lines = osm_network.loc[osm_network["geometry_types"].isin(["LineString", "MultiLineString"])]
-        osm_network_lines = osm_network_lines[['id','timestamp','version','osm_type','highway','geometry']].to_crs(4326)
-        osm_data = osm_data.append(osm_network_lines, ignore_index=True)
+    osm_pull = extract.get_network(network_type='all')
+    if osm_pull is not None:
+        osm_pull["geometry_types"] = osm_pull.geometry.geom_type
+        osm_pull = osm_pull.loc[osm_pull["geometry_types"].isin(["LineString", "MultiLineString"])]
+        osm_pull = osm_pull[['id','timestamp','version','osm_type','highway','geometry']]
+        osm_data = osm_data.append(osm_pull, ignore_index=True)
+        del osm_pull
 
-    osm_boundaries = extract.get_boundaries(boundary_type='all')
-    if osm_boundaries is not None:
-        osm_boundaries["geometry_types"] = osm_boundaries.geometry.geom_type
-        osm_boundaries_lines = osm_boundaries.loc[osm_boundaries["geometry_types"].isin(["LineString", "MultiLineString"])]
-        osm_boundaries_lines = osm_boundaries_lines[['id','timestamp','version','osm_type','boundary','geometry']].to_crs(4326)
-        osm_data = osm_data.append(osm_boundaries_lines, ignore_index=True)
+    osm_pull = extract.get_boundaries(boundary_type='all')
+    if osm_pull is not None:
+        osm_pull["geometry_types"] = osm_pull.geometry.geom_type
+        osm_pull = osm_pull.loc[osm_pull["geometry_types"].isin(["LineString", "MultiLineString"])]
+        osm_pull = osm_pull[['id','timestamp','version','osm_type','boundary','geometry']]
+        osm_data = osm_data.append(osm_pull, ignore_index=True)
+        del osm_pull
 
-    osm_natural = extract.get_natural(custom_filter={'natural': ['coastline','water']}) #{'natural': ['coastline']})
-    if osm_natural is not None:
-        osm_natural["geometry_types"] = osm_natural.geometry.geom_type
-        osm_natural_lines = osm_natural.loc[osm_natural["geometry_types"].isin(["LineString", "MultiLineString"])]
-        osm_natural_lines = osm_natural_lines[['id','timestamp','version','osm_type','natural','geometry']].to_crs(4326)
-        osm_data = osm_data.append(osm_natural_lines, ignore_index=True)
+    osm_pull = extract.get_natural(custom_filter={'natural': ['coastline','water']}) #{'natural': ['coastline']})
+    if osm_pull is not None:
+        osm_pull["geometry_types"] = osm_pull.geometry.geom_type
+        osm_pull = osm_pull.loc[osm_pull["geometry_types"].isin(["LineString", "MultiLineString"])]
+        osm_pull = osm_pull[['id','timestamp','version','osm_type','natural','geometry']].to_crs(4326)
+        osm_data = osm_data.append(osm_pull, ignore_index=True)
+        del osm_pull
 
-    osm_waterways = extract.get_data_by_custom_criteria(custom_filter={'waterway': Conf.tags.waterway})
-    if osm_waterways is not None:
-        osm_waterways["geometry_types"] = osm_waterways.geometry.geom_type
-        osm_waterways_lines = osm_waterways.loc[osm_waterways["geometry_types"].isin(["LineString", "MultiLineString"])]
-        osm_waterways_lines = osm_waterways_lines[['id','timestamp','version','osm_type','waterway','geometry']].to_crs(4326)
-        osm_data = osm_data.append(osm_waterways_lines, ignore_index=True)
+    osm_pull = extract.get_data_by_custom_criteria(custom_filter={'waterway': Conf.tags.waterway})
+    if osm_pull is not None:
+        osm_pull["geometry_types"] = osm_pull.geometry.geom_type
+        osm_pull = osm_pull.loc[osm_pull["geometry_types"].isin(["LineString", "MultiLineString"])]
+        osm_pull = osm_pull[['id','timestamp','version','osm_type','waterway','geometry']]
+        osm_data = osm_data.append(osm_pull, ignore_index=True)
+        del osm_pull
     
-    osm_railways = extract.get_data_by_custom_criteria(custom_filter={'railway': Conf.tags.railway})
-    if osm_railways is not None:
-        osm_railways["geometry_types"] = osm_railways.geometry.geom_type
-        osm_railways_lines = osm_railways.loc[osm_railways["geometry_types"].isin(["LineString", "MultiLineString"])]
-        osm_railways_lines = osm_railways_lines[['id','timestamp','version','osm_type','railway','geometry']].to_crs(4326)
-        osm_data = osm_data.append(osm_railways_lines, ignore_index=True)
-    
+    osm_pull = extract.get_data_by_custom_criteria(custom_filter={'railway': Conf.tags.railway})
+    if osm_pull is not None:
+        osm_pull["geometry_types"] = osm_pull.geometry.geom_type
+        osm_pull = osm_pull.loc[osm_pull["geometry_types"].isin(["LineString", "MultiLineString"])]
+        osm_pull = osm_pull[['id','timestamp','version','osm_type','railway','geometry']]
+        osm_data = osm_data.append(osm_pull, ignore_index=True)
+        del osm_pull
+
     #temp_dir.cleanup()
     osm_data.fillna('', inplace=True)
     osm_data = osm_data.reset_index(drop=True)

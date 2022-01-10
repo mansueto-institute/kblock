@@ -51,6 +51,7 @@ def compute_k(block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame, block_c
         block_id: string, unique identification code in block_col
         street_linestrings: (optional) GeoDataFrame or PyGEOS Geometry array, linestrings representing street networks, requires CRS WGS 84 EPSG 4326 or 3395. For faster performance use EPSG 3395 PyGEOS Geometry array.
         buffer_streets: bool, default False, if True removes all disconnected streets in a buffer radius of 30
+        include_geometry: bool, default True, if False the block geometry will not be included and function will return a Pandas DataFrame
     Returns:
         GeoDataFrame with block geometries in row and the columns: 'block_id','block_area','building_area','building_count','building_layers','k_complexity'
         Geometry projected in CRS WGS 84 EPSG 4326.

@@ -141,9 +141,9 @@ def index_streets(osm_data: Union[pygeos.Geometry, gpd.GeoDataFrame], gadm_data:
     
     streets_map = streets_map1.append(streets_map2)
     streets_map = streets_map.drop_duplicates()
-    streets_map = streets_map.merge(osm_streets[['line_id','id','geometry']], how = 'left', left_on='index_streets', right_index=True)
+    streets_map = streets_map.merge(osm_streets[['id','geometry']], how = 'left', left_on='index_streets', right_index=True)
     streets_map = streets_map.merge(gadm_data[[gadm_column]], how = 'left', left_on='index_gadm', right_index=True)
     
-    osm_mapped = gpd.GeoDataFrame(streets_map[['line_id','id',gadm_column,'geometry']]).set_crs(epsg=4326)
+    osm_mapped = gpd.GeoDataFrame(streets_map[['id',gadm_column,'geometry']]).set_crs(epsg=4326)
     osm_mapped = osm_mapped.rename(columns={gadm_column:"gadm_code"})
     return osm_mapped
