@@ -23,4 +23,4 @@ osm_dir_arg=/project2/bettencourt/mnp/production/inputs/osm
 gadm_dir_arg=/project2/bettencourt/mnp/production/inputs/gadm
 output_dir_arg=/project2/bettencourt/mnp/production/outputs
 
-python batch_blocks.py --log_file $log_file_arg  --country_chunk $country_chunk_arg --osm_dir $osm_dir_arg --gadm_dir $gadm_dir_arg  --output_dir $output_dir_arg
+python batch_prepare.py --log_file $log_file_arg  --country_chunk $country_chunk_arg --osm_dir $osm_dir_arg --gadm_dir $gadm_dir_arg  --output_dir $output_dir_arg
