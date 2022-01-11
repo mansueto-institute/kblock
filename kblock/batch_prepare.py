@@ -33,7 +33,10 @@ def code_to_geofabrik(country_code: str, country_dict: dict = country_dict) -> s
     return geofabrik_name
 
 def geofabrik_to_code(geofabrik_name: str, country_dict: dict = country_dict) -> str:
-    country_code = [key for (key, value) in country_dict.items() if value[0] == geofabrik_name][0]
+    """
+    Returns more than one country code for the following countries {'israel-and-palestine' : ['PSE', 'ISR'], 'malaysia-singapore-brunei' : ['BRN', 'MYS', 'SGP'], 'morocco' : ['MAR', 'ESH'], 'senegal-and-gambia' : ['GMB', 'SEN']}
+    """
+    country_code = [key for (key, value) in country_dict.items() if value[0] == geofabrik_name]
     return country_code
 
 def read_osm(country_code: str, directory_path: Union[str, Path]) -> gpd.GeoDataFrame:
@@ -62,31 +65,29 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
     output_country_list = [(re.sub('blocks_', '', re.sub('.parquet', '', i))) for i in output_file_list] 
     logging.info(f"Finished countries: {output_country_list}")
     
-    country_list = list(country_dict.keys())
-
-    # Subset to country list (otherwise will process all countries)
+    # Subset to country list (remove invalid country codes and remove completed countries)
     if country_chunk: 
-        country_list = [x for x in country_list if x in set(country_chunk)]
+        country_list = list(country_dict.keys())
+        country_list = [x for x in country_chunk if x in set(country_list)]
+        country_list = [x for x in country_chunk if x not in set(output_country_list)]
         if not country_list: 
             raise ValueError('Empty country list')
-        
-    # Subset to countries with no existing output file
-    if output_country_list:
-        country_list = [x for x in country_chunk if x in set(country_list)]
+
     logging.info(f"Remaining countries: {country_list}")
 
     # Confirm remaining countries have data in input files
-    osm_inputs_list = list(filter(re.compile("-latest-linestring.geojson").search, sorted(list(os.listdir(Path(osm_dir))))))
-    osm_inputs_list = list(map(geofabrik_to_code, [re.sub('-latest-linestring.geojson', '', i) for i in osm_inputs_list]))
+    osm_list_of_lists = list(filter(re.compile("-latest-linestring.geojson").search, sorted(list(os.listdir(Path(osm_dir))))))
+    osm_list_of_lists = list(map(geofabrik_to_code, [re.sub('-latest-linestring.geojson', '', i) for i in osm_list_of_lists]))
+    osm_inputs_list = [i for flatlist in osm_list_of_lists for i in flatlist]
     gadm_inputs_list = list(filter(re.compile("gadm_").match, sorted(list(os.listdir(Path(gadm_dir))))))
     gadm_inputs_list = [(re.sub('gadm_', '', re.sub('.geojson', '', i))) for i in gadm_inputs_list] 
-    if country_list: 
-        in_chunk_not_in_osm_inputs = [x for x in country_list if x not in set(osm_inputs_list)]
-        if len(in_chunk_not_in_osm_inputs) > 0:
-            raise ValueError(f'OSM input data does not exist for {in_chunk_not_in_osm_inputs} in country_chunk arg.')
-        in_chunk_not_in_gadm_inputs = [x for x in country_list if x not in set(gadm_inputs_list)]
-        if len(in_chunk_not_in_gadm_inputs) > 0:
-            raise ValueError(f'GADM input data does not exist for {in_chunk_not_in_gadm_inputs} in country_chunk arg.')
+
+    in_chunk_not_in_osm_inputs = [x for x in country_list if x not in set(osm_inputs_list)]
+    if len(in_chunk_not_in_osm_inputs) > 0:
+        raise ValueError(f'OSM input data does not exist for {in_chunk_not_in_osm_inputs} in country_chunk arg.')
+    in_chunk_not_in_gadm_inputs = [x for x in country_list if x not in set(gadm_inputs_list)]
+    if len(in_chunk_not_in_gadm_inputs) > 0:
+        raise ValueError(f'GADM input data does not exist for {in_chunk_not_in_gadm_inputs} in country_chunk arg.')
 
     logging.info(f"Generate block geometries")
 
