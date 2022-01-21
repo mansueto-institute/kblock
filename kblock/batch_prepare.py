@@ -21,6 +21,15 @@ import os
 import io
 import argparse
 np.set_printoptions(suppress=True)
+warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*')
+
+import pyarrow
+import dask 
+import dask.bag as db
+import dask_geopandas
+from dask.distributed import Client, LocalCluster, print as dask_print
+from dask.diagnostics import ProgressBar
+
 
 def mem_profile() -> str: 
     mem_use = str(round(100 - psutil.virtual_memory().percent,4))+'% of '+str(round(psutil.virtual_memory().total/1e+9,3))+' GB RAM'
@@ -95,20 +104,24 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
     for country_code in country_list: 
         logging.info(f"Processing: {country_code}")
         
-        # Download OSM files
+        # Read OSM files
         t0 = time.time()
         osm_gpd = read_osm(country_code = country_code, directory_path = osm_dir) 
         osm_gpd = osm_gpd.explode(ignore_index = True)
         osm_pygeos = prepare.from_shapely_srid(geometry = osm_gpd, srid = 4326) 
         t1 = time.time()
-        logging.info(f"Download OSM: osm_gpd: {osm_gpd.shape}, {mem_profile()}, {str(round(t1-t0,3))} seconds")
+        logging.info(f"Read OSM: osm_gpd: {osm_gpd.shape}, {mem_profile()}, {str(round(t1-t0,3))} seconds")
     
-        # Download GADM files
+        # Read GADM files
         t0 = time.time()
         gadm_gpd = gpd.read_file(Path(gadm_dir) / f'gadm_{country_code}.geojson')
         gadm_col = max(list(filter(re.compile("GID_*").match, list(gadm_gpd.columns))))
         t1 = time.time()
-        logging.info(f"Download GADM: gadm_gpd: {gadm_gpd.shape}, gadm_col: {gadm_col}, {mem_profile()}, {str(round(t1-t0,3))} seconds")
+        logging.info(f"Read GADM: gadm_gpd: {gadm_gpd.shape}, gadm_col: {gadm_col}, {mem_profile()}, {str(round(t1-t0,3))} seconds")
+
+        # Set 30 MB per partition (Dask recommends 100 MB)
+        mem_use = osm_gpd.memory_usage(index=True, deep=True).sum()/1000000 + gadm_gpd.memory_usage(index=True, deep=True).sum()/1000000
+        partition_count = round(mem_use/30)
         
         # Trim coastline if applicable
         if osm_gpd[osm_gpd['natural'].isin(['coastline'])].shape[0] > 0:
@@ -143,25 +156,23 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         gadm_list = list(gadm_gpd[gadm_col].unique())
         
         # Initialize
-        block_init = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
-        block_boundaries = []
-        
+        block_bulk = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
+
         # Build blocks for each GADM
-        logging.info(f"Iterate over GADMs")
+        logging.info(f"Apply over GADMs")
         t0 = time.time()
-        for i in gadm_list: 
-            logging.info(f"GADMs: {i}")
-            gadm_blocks = prepare.build_blocks(gadm_data = gadm_gpd, osm_data = osm_pygeos, gadm_column = gadm_col, gadm_code = i)
-            block_boundaries.append(gadm_blocks)
-            check_area = np.sum(gadm_blocks['geometry'].to_crs(3395).area)/np.sum(gadm_gpd[gadm_gpd[gadm_col] == i]['geometry'].to_crs(3395).area)
-            if (check_area/1) < .99: logging.info(f"Area proportion: {round(check_area,4)}")
-        country_blocks = block_init.append(block_boundaries, ignore_index=True)
+        bag_sequence = db.from_sequence(gadm_list, npartitions = partition_count) 
+        compute_sequence = bag_sequence.map(lambda x: prepare.build_blocks(gadm_data = gadm_gpd, osm_data = osm_pygeos, gadm_column = gadm_col, gadm_code = x))
+        output_sequence = compute_sequence.compute() 
+        for i,j in enumerate(output_sequence): block_bulk = pd.concat([block_bulk, output_sequence[i]], ignore_index=True)
+        #check_area = np.sum(gadm_blocks['geometry'].to_crs(3395).area)/np.sum(gadm_gpd[gadm_gpd[gadm_col] == i]['geometry'].to_crs(3395).area)
+        #if (check_area/1) < .99: logging.info(f"Area proportion: {round(check_area,4)}")
         t1 = time.time()
-        logging.info(f"build_blocks() function: country_blocks: {country_blocks.shape}, {mem_profile()}, {str(round(t1-t0,3))} seconds")
+        logging.info(f"build_blocks() function: block_bulk: {block_bulk.shape}, {mem_profile()}, {str(round(t1-t0,3))} seconds")
         
         # Write block geometries
         t0 = time.time()
-        country_blocks.to_parquet(Path(block_dir) / f'blocks_{country_code}.parquet', compression='snappy')
+        block_bulk.to_parquet(Path(block_dir) / f'blocks_{country_code}.parquet', compression='snappy')
         t1 = time.time()
         logging.info(f"Writing ./blocks_{country_code}.parquet, {mem_profile()}, {str(round(t1-t0,3))} seconds")
         logging.info(f"Finished {country_code}.")
@@ -169,7 +180,9 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
     logging.info(f"Finished.")
 
 def setup(args=None):
-    parser = argparse.ArgumentParser(description='Download and build blocks.')
+    cluster = LocalCluster()
+    client = Client(cluster)
+    parser = argparse.ArgumentParser(description='Build blocks.')
     parser.add_argument('--log_file', required=False, type=Path, dest="log_file", help="Path to write log file") 
     parser.add_argument('--country_chunk', required=False, type=str, dest="country_chunk", nargs='+', help="List of country codes following ISO 3166-1 alpha-3 format")
     parser.add_argument('--osm_dir', required=True, type=Path, dest="osm_dir", help="OSM directory")

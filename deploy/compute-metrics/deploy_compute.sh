@@ -17,4 +17,4 @@ osm_dir_arg=/Users/nm/Downloads/production/inputs/osm
 gadm_dir_arg=/Users/nm/Downloads/production/inputs/gadm
 output_dir_arg=/Users/nm/Downloads/production/outputs
 
-python batch_prepare.py --log_file $log_file_arg --country_chunk $country_chunk_arg --osm_dir $osm_dir_arg --gadm_dir $gadm_dir_arg --output_dir $output_dir_arg
+python batch_blocks.py --log_file $log_file_arg --country_chunk $country_chunk_arg --osm_dir $osm_dir_arg --gadm_dir $gadm_dir_arg --output_dir $output_dir_arg

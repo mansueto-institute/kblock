@@ -1,20 +1,34 @@
 #!/bin/bash
 
-#SBATCH --job-name=build_block
+#SBATCH --job-name=compute_metrics
 #SBATCH --partition=broadwl
 #SBATCH --nodes=1
-#SBATCH --ntasks=20
-#SBATCH --mem=56000
-#SBATCH --output=/project2/bettencourt/mnp/production/jobs/build_block_job.out
-#SBATCH --error=/project2/bettencourt/mnp/production/jobs/build_block_job.err
+#SBATCH --ntasks-per-node=1
+#SBATCH --mem=54000
+#SBATCH --nodes=3
+#SBATCH --ntasks=28
+#SBATCH --ntasks-per-node=14
+#SBATCH --output=/project2/bettencourt/mnp/production/jobs/compute_metrics_job.out
+#SBATCH --error=/project2/bettencourt/mnp/production/jobs/compute_metrics_job.err
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=nmarchio@uchicago.edu
-#SBATCH --time=36:00:00
+#SBATCH --time=24:00:00
 #SBATCH --account=pi-bettencourt
 
+module load openmpi/3.1.2 
+module load python/anaconda-2021.05
 
-# country_list=(STP SYC GNQ COM MUS DJI GNB CPV ERI GAB MRT SWZ COG LBR RWA SLE BDI BEN TGO)
-# country_list=(NAM CIV NER AGO BFA SDN GHA GMB TCD CAF ETH BWA SOM SSD GIN MWI LSO MLI ZWE KEN MOZ ESH CMR ZMB MDG ZAF UGA COD NGA TZA SEN)
+source activate prep_env
+
+mpirun python bath_compute.py log_file: Path, country_chunk: list, blocks_dir: Path, streets_dir: Path, buildings_dir: Path, raster_dir: Path, output_dir: Path)
+
+
+#pip install mpi4py dask-mpi dask-ml
+
+
+conda install -c conda-forge dask-mpi
+
+
 country_list=(AGO BDI BEN BFA BWA CAF CIV CMR COD COG COM CPV DJI ERI ESH ETH GAB GHA GIN GMB GNB GNQ KEN LBR LSO MDG MLI MOZ MRT MUS MWI NAM NER NGA SDN SEN SLE SOM SSD STP SWZ SYC TCD TGO TZA ZAF ZMB ZWE UGA RWA)
 
 log_file_arg=/project2/bettencourt/mnp/production/jobs/log_build_blocks.log
