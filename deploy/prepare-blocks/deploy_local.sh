@@ -1,12 +1,17 @@
 #!/bin/bash
 
-#conda create --name prep_env python=3.9.7 --yes
-#source activate prep_env
-#conda install -c conda-forge pygeos=0.12.0 --yes
-#conda install -c conda-forge geopandas=0.10.2 --yes
-#conda install -c conda-forge urlpath=1.2.0 --yes
-#conda install -c conda-forge pyarrow=6.0.1 --yes
-#conda install -c conda-forge dask-geopandas=0.83 --yes
+# conda create --name pygeospatial python=3.9.7 --yes
+# source activate pygeospatial 
+# conda install -c conda-forge pygeos=0.12.0 --yes
+# conda install -c conda-forge geopandas=0.10.2 --yes 
+# conda install -c conda-forge urlpath --yes
+# conda install -c conda-forge dask --yes
+# conda install -c conda-forge dask-geopandas --yes
+# conda install -c conda-forge pyarrow --yes
+# conda install -c conda-forge mpi4py --yes
+# conda install -c conda-forge dask-mpi --yes
+# conda install -c conda-forge dask-jobqueue --yes
+# conda install -c conda-forge multiprocess --yes
 
 #country_list=(AGO BDI BEN BFA BWA CAF CIV CMR COD COG COM CPV DJI ERI ESH ETH GAB GHA GIN GMB GNB GNQ KEN LBR LSO MDG MLI MOZ MRT MUS MWI NAM NER NGA RWA SDN SEN SLE SOM SSD STP SWZ SYC TCD TGO TZA UGA ZAF ZMB ZWE)
 country_chunk=(SLE)
