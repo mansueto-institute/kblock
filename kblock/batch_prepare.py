@@ -25,11 +25,13 @@ warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*
 
 import pyarrow
 import dask 
-import dask.bag as db
+#import dask.bag as db
 import dask_geopandas
 
-from dask_mpi import initialize
-from dask.distributed import Client, LocalCluster
+#from dask_mpi import initialize
+#from dask.distributed import Client, LocalCluster
+#dask.config.set(scheduler='processes')
+#dask.config.set(num_workers=n_workers)
 
 def mem_profile() -> str: 
     """
@@ -65,8 +67,8 @@ def read_osm(country_code: str, directory_path: Union[str, Path]) -> gpd.GeoData
 
 def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, output_dir: Path):
 
-    initialize(local_directory=os.path.dirname(Path(log_file))) 
-    client = Client()
+    #initialize(local_directory=os.path.dirname(Path(log_file))) 
+    #client = Client() # Client(n_workers=n_workers)
 
     logging.getLogger().setLevel(logging.INFO)
     logging.basicConfig(filename=Path(log_file), format='%(asctime)s:%(message)s: ', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
@@ -147,7 +149,7 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
             gadm_gpd_union = gadm_gpd_trim.unary_union
             gadm_gpd_explode = gadm_gpd.explode(ignore_index = True)
             gadm_gpd_residual = gadm_gpd_explode.disjoint(gadm_gpd_union, align=True)
-            gadm_gpd = gadm_gpd_trim.append(gadm_gpd_explode[gadm_gpd_residual], ignore_index=True)
+            gadm_gpd = pd.concat([gadm_gpd_trim, gadm_gpd_explode[gadm_gpd_residual]], ignore_index=True)
             gadm_gpd = gadm_gpd.dissolve(by=[gadm_col], as_index = False)
             del gadm_gpd_trim, gadm_gpd_union, gadm_gpd_explode, gadm_gpd_residual
             logging.info(f"Trimmed with residuals gadm_gpd: {gadm_gpd.shape}, {mem_profile()}, {str(round(t1-t0,3))} seconds")
@@ -172,10 +174,14 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         logging.info(f"Apply over GADMs")
 
         t0 = time.time()
-        bag_sequence = db.from_sequence(gadm_list, npartitions = partition_count) 
-        compute_sequence = bag_sequence.map(lambda x: prepare.build_blocks(gadm_data = gadm_gpd, osm_data = osm_pygeos, gadm_column = gadm_col, gadm_code = x))
-        output_sequence = compute_sequence.compute()
-        for i,j in enumerate(output_sequence): block_bulk = pd.concat([block_bulk, output_sequence[i]], ignore_index=True)
+        #bag_sequence = db.from_sequence(gadm_list, npartitions = partition_count) 
+        #compute_sequence = bag_sequence.map(lambda x: prepare.build_blocks(gadm_data = gadm_gpd, osm_data = osm_pygeos, gadm_column = gadm_col, gadm_code = x))
+        #output_sequence = compute_sequence.compute()
+        #for i,j in enumerate(output_sequence): block_bulk = pd.concat([block_bulk, output_sequence[i]], ignore_index=True)
+
+        output_map = list(map(lambda x: prepare.build_blocks(gadm_data = gadm_gpd, osm_data = osm_pygeos, gadm_column = gadm_col, gadm_code = x), gadm_list))
+        for i,j in enumerate(output_map): block_bulk = pd.concat([block_bulk, output_map[i]], ignore_index=True)
+        
         #check_area = np.sum(gadm_blocks['geometry'].to_crs(3395).area)/np.sum(gadm_gpd[gadm_gpd[gadm_col] == i]['geometry'].to_crs(3395).area)
         #if (check_area/1) < .99: logging.info(f"Area proportion: {round(check_area,4)}")
         t1 = time.time()

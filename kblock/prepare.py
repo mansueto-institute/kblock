@@ -139,7 +139,7 @@ def index_streets(osm_data: Union[pygeos.Geometry, gpd.GeoDataFrame], gadm_data:
     streets_map1 = pd.DataFrame({'index_gadm': index_1[0], 'index_streets': index_1[1]})
     streets_map2 = pd.DataFrame({'index_gadm': index_2[0], 'index_streets': index_2[1]})
     
-    streets_map = streets_map1.append(streets_map2)
+    streets_map = pd.concat([streets_map1, streets_map2], ignore_index=True)
     streets_map = streets_map.drop_duplicates()
     streets_map = streets_map.merge(osm_streets[['id','geometry']], how = 'left', left_on='index_streets', right_index=True)
     streets_map = streets_map.merge(gadm_data[[gadm_column]], how = 'left', left_on='index_gadm', right_index=True)
