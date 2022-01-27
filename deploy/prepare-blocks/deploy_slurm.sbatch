@@ -3,8 +3,8 @@
 #SBATCH --job-name=build_block
 #SBATCH --partition=broadwl
 #SBATCH --nodes=1
-#SBATCH --ntasks=10
-#SBATCH --ntasks-per-node=10
+#SBATCH --ntasks=12
+#SBATCH --ntasks-per-node=12
 #SBATCH --mem=56000
 #SBATCH --output=/project2/bettencourt/mnp/production/jobs/build_block_job.out
 #SBATCH --error=/project2/bettencourt/mnp/production/jobs/build_block_job.err
@@ -14,8 +14,7 @@
 #SBATCH --account=pi-bettencourt
 
 module load python/anaconda-2021.05
-module load intel/16.0
-module load intelmpi/5.1+intel-16.0
+module load openmpi/3.1.2 
 
 source activate pygeospatial 
 
@@ -27,5 +26,5 @@ osm_dir_arg=/project2/bettencourt/mnp/production/inputs/osm
 gadm_dir_arg=/project2/bettencourt/mnp/production/inputs/gadm
 output_dir_arg=/project2/bettencourt/mnp/production/outputs
 
-mpirun python batch_prepare.py --log_file $log_file_arg  --country_chunk $country_chunk_arg --osm_dir $osm_dir_arg --gadm_dir $gadm_dir_arg  --output_dir $output_dir_arg
+mpirun -np 12 python batch_prepare.py --log_file $log_file_arg  --country_chunk $country_chunk_arg --osm_dir $osm_dir_arg --gadm_dir $gadm_dir_arg  --output_dir $output_dir_arg
 

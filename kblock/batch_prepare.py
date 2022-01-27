@@ -29,7 +29,7 @@ import dask.bag as db
 import dask_geopandas
 
 from dask_mpi import initialize
-from dask.distributed import Client
+from dask.distributed import Client, LocalCluster
 
 def mem_profile() -> str: 
     """
@@ -65,12 +65,11 @@ def read_osm(country_code: str, directory_path: Union[str, Path]) -> gpd.GeoData
 
 def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, output_dir: Path):
 
-    initialize(local_directory=os.path.dirname(Path(log_file))) # interface='ib0'
-    client = Client() # cluster.adapt(minimum=1, maximum=os.cpu_count())
+    initialize(local_directory=os.path.dirname(Path(log_file))) 
+    client = Client()
 
     logging.getLogger().setLevel(logging.INFO)
     logging.basicConfig(filename=Path(log_file), format='%(asctime)s:%(message)s: ', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
-    #print = logging.getLogger().info
     logging.info(f"Countries to process: {country_chunk}")
     
     # Make directories
@@ -159,6 +158,9 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         osm_streets.to_parquet(Path(street_dir) / f'streets_{country_code}.parquet', compression='snappy')
         t1 = time.time()
         logging.info(f"Writing osm_streets ({osm_streets.shape}) from osm_gpd ({osm_gpd.shape}) ./streets_{country_code}.parquet, {mem_profile()}, {str(round(t1-t0,3))} seconds")
+        # Set 30 MB per partition (Dask recommends 100 MB)
+        mem_estimate = osm_gpd.memory_usage(index=True, deep=True).sum()/1000000 + gadm_gpd.memory_usage(index=True, deep=True).sum()/1000000
+        partition_count = round(mem_estimate/30)
         del osm_gpd
         
         gadm_list = list(gadm_gpd[gadm_col].unique())
@@ -168,9 +170,7 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
 
         # Build blocks for each GADM
         logging.info(f"Apply over GADMs")
-        # Set 30 MB per partition (Dask recommends 100 MB)
-        mem_use = osm_gpd.memory_usage(index=True, deep=True).sum()/1000000 + gadm_gpd.memory_usage(index=True, deep=True).sum()/1000000
-        partition_count = round(mem_use/30)
+
         t0 = time.time()
         bag_sequence = db.from_sequence(gadm_list, npartitions = partition_count) 
         compute_sequence = bag_sequence.map(lambda x: prepare.build_blocks(gadm_data = gadm_gpd, osm_data = osm_pygeos, gadm_column = gadm_col, gadm_code = x))
@@ -192,6 +192,7 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
 
 def setup(args=None):    
     parser = argparse.ArgumentParser(description='Build blocks.')
+    #parser.add_argument('--n_workers', required=False, type=int, dest="n_workers", help="Number of distributed workers") 
     parser.add_argument('--log_file', required=False, type=Path, dest="log_file", help="Path to write log file") 
     parser.add_argument('--country_chunk', required=False, type=str, dest="country_chunk", nargs='+', help="List of country codes following ISO 3166-1 alpha-3 format")
     parser.add_argument('--osm_dir', required=True, type=Path, dest="osm_dir", help="OSM directory")
