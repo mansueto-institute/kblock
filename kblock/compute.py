@@ -5,7 +5,6 @@ import geopandas as gpd
 import pyproj
 from typing import List, Union
 gpd.options.use_pygeos = True
-pd.options.mode.chained_assignment = None 
 
 def index_buildings(gadm_block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
@@ -15,7 +14,7 @@ def index_buildings(gadm_block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFra
     the footprint to the block containing its centroid
     Args:
         gadm_block_data: GeoDataFrame output returned from build_blocks() function, requires CRS WGS 84 EPSG 4326 or 3395
-        bldg_data: GeoDataFrame containing building geometries, requires CRS WGS 84 EPSG 4326 or 3395
+        bldg_data: GeoDataFrame containing building geometries, requires CRS WGS 84 EPSG 4326 or 3395 (accepts 'Polygon' or 'Point' geometries)
     Returns:
         GeoDataFrame with building geometries mapped to 'block_id','gadm_code','country_code'.
         Geometry projected in CRS WGS 84 EPSG 4326. 
@@ -25,11 +24,17 @@ def index_buildings(gadm_block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFra
 
     if gadm_block_data.crs == 'epsg:4326': gadm_block_data = gadm_block_data.to_crs(epsg=3395)
     if bldg_data.crs == 'epsg:4326': bldg_data = bldg_data.to_crs(epsg=3395)
-    bldg_points = bldg_data.copy()
-    bldg_points['geometry'] = bldg_points.centroid
+
+    gtypes = bldg_data['geometry'].geom_type.unique()
+    if len(gtypes) > 1 or gtypes[0] != 'Point':
+        bldg_points = bldg_data.copy()
+        bldg_points['geometry'] = bldg_points.centroid
+    else:
+        bldg_points = bldg_data.copy()
+
     bldg_index = bldg_points.sindex
 
-    index_bulk = bldg_index.query_bulk(gadm_block_data['geometry'], predicate="intersects")
+    index_bulk = bldg_index.query_bulk(gadm_block_data['geometry'], predicate="intersects")  ##
     blocks_buildings_map = pd.DataFrame({'index_blocks': index_bulk[0], 'index_buildings': index_bulk[1]})
     blocks_buildings_map = blocks_buildings_map.merge(bldg_data[['geometry']], how = 'left', left_on='index_buildings', right_index=True)
     blocks_buildings_map = blocks_buildings_map.merge(gadm_block_data[['block_id','gadm_code','country_code']], left_on='index_blocks', right_index=True)
@@ -76,7 +81,9 @@ def compute_k(block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame, block_c
     bldg_count = np.sum(pygeos.get_num_geometries(bldg_array))
         
     if bldg_count not in [1,0]:
-        bldg_data["geometry"] = bldg_data.centroid
+        gtypes = bldg_data['geometry'].geom_type.unique()
+        if len(gtypes) > 1 or gtypes[0] != 'Point':
+            bldg_data["geometry"] = bldg_data.centroid
         building_points = pygeos.multipoints(pygeos.from_shapely(bldg_data["geometry"]))
         points = pygeos.get_parts(building_points)
         block = pygeos.from_shapely(block_data['geometry'])
@@ -88,7 +95,8 @@ def compute_k(block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame, block_c
         if street_linestrings is not None:
             if type(street_linestrings) == gpd.geodataframe.GeoDataFrame:    
                 street_linestrings = from_shapely_srid(geometry = street_linestrings, srid = 3395)
-            assert type(street_linestrings) == np.ndarray and all(pygeos.is_geometry(street_linestrings)), 'street_linestrings is an invalid geometry type.'
+            assert type(street_linestrings) == np.ndarray and any(pygeos.is_geometry(street_linestrings)), 'street_linestrings is an invalid geometry type.'
+            street_linestrings = street_linestrings[pygeos.get_type_id(street_linestrings) == 1]
             if np.unique(pygeos.get_srid(street_linestrings))[0] == 4326:
                 street_linestrings = transform_crs(geometry = street_linestrings, epsg_from = "EPSG:4326", epsg_to = "EPSG:3395")
             assert len(np.unique(pygeos.get_srid(street_linestrings))) == 1 and np.unique(pygeos.get_srid(street_linestrings))[0] == 3395, 'street_linestrings is not epsg:4326 or epsg:3395.' 
@@ -101,9 +109,9 @@ def compute_k(block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame, block_c
                 street_length = pygeos.length(street_linestrings)
                 street_linestrings = pygeos.intersection(street_linestrings,complete_buffer)
                 street_length_trim = pygeos.length(street_linestrings)
-                street_length_delta = round(street_length[0] - street_length_trim[0],3)
+                street_length_delta = round(street_length[0] - street_length_trim[0],2)
                 if street_length_delta > 0:
-                    print(f'Buffering: {block_id}, {street_length_delta} meters, {round((street_length_delta/street_length[0])*100,5)} %')    
+                    print(f'Buffering: {block_id}, {street_length_delta} meters, {round((street_length_delta/street_length[0])*100,2)} %')    
             if pygeos.is_empty(street_linestrings[0]) == False:
                 block_intersect = pygeos.intersects(street_linestrings,block_parcels)
                 block_parcels_outer = block_parcels[block_intersect]
@@ -205,7 +213,9 @@ def compute_layers(block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame, bl
     bldg_count = np.sum(pygeos.get_num_geometries(bldg_array))
     
     if bldg_count not in [1,0]:
-        bldg_data["geometry"] = bldg_data.centroid
+        gtypes = bldg_data['geometry'].geom_type.unique()
+        if len(gtypes) > 1 or gtypes[0] != 'Point':
+            bldg_data["geometry"] = bldg_data.centroid
         building_points = pygeos.multipoints(pygeos.from_shapely(bldg_data["geometry"]))
         points = pygeos.get_parts(building_points)
         block = pygeos.from_shapely(block_data['geometry'])
@@ -217,15 +227,16 @@ def compute_layers(block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame, bl
         if street_linestrings is not None:
             if type(street_linestrings) == gpd.geodataframe.GeoDataFrame:    
                 street_linestrings = from_shapely_srid(geometry = street_linestrings, srid = 3395)
-            assert type(street_linestrings) == np.ndarray and all(pygeos.is_geometry(street_linestrings)), 'street_linestrings is an invalid geometry type.'
+            assert type(street_linestrings) == np.ndarray and any(pygeos.is_geometry(street_linestrings)), 'street_linestrings is an invalid geometry type.'
+            street_linestrings = street_linestrings[pygeos.get_type_id(street_linestrings) == 1]
             if np.unique(pygeos.get_srid(street_linestrings))[0] == 4326:
                 street_linestrings = transform_crs(geometry = street_linestrings, epsg_from = "EPSG:4326", epsg_to = "EPSG:3395")
             assert len(np.unique(pygeos.get_srid(street_linestrings))) == 1 and np.unique(pygeos.get_srid(street_linestrings))[0] == 3395, 'street_linestrings is not epsg:4326 or epsg:3395.' 
             street_linestrings = pygeos.intersection(pygeos.multilinestrings(street_linestrings),block)
             if buffer_streets == True:
-                connected_streets = pygeos.get_parts(pygeos.buffer(street_linestrings, radius=30, quadsegs=5)) 
+                connected_streets = pygeos.get_parts(pygeos.buffer(street_linestrings, radius=30, quadsegs=5)) # buffer var
                 connected_streets = connected_streets[pygeos.length(connected_streets).argsort()[::-1] == 0]
-                exterior_boundary = pygeos.buffer(pygeos.get_exterior_ring(block), radius=60, quadsegs=5)
+                exterior_boundary = pygeos.buffer(pygeos.get_exterior_ring(block), radius=60, quadsegs=5) # buffer var
                 complete_buffer = pygeos.union(connected_streets, exterior_boundary)
                 street_length = pygeos.length(street_linestrings)
                 street_linestrings = pygeos.intersection(street_linestrings,complete_buffer)

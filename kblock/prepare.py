@@ -63,7 +63,7 @@ def trim_coastline(gadm_data: gpd.GeoDataFrame, osm_data: gpd.GeoDataFrame) -> g
         osm_data: GeoDataFrame containing linestrings coastline features, requires CRS WGS 84 EPSG 4326
     Returns:
         GeoDataFrame with polygon(s) of the input geometry with trimmed coastline.
-        Geometry projected in CRS WGS 84 EPSG 4326. 
+        Geometry projected in CRS WGS 84 EPSG 4326.
     """
     assert gadm_data.crs == 'epsg:4326', "gadm_data is not epsg:4326."
     assert osm_data.crs == 'epsg:4326', "osm_data is not epsg:4326."

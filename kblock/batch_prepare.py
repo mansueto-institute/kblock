@@ -25,17 +25,11 @@ warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*
 
 import pyarrow
 import dask 
-#import dask.bag as db
 import dask_geopandas
-
-#from dask_mpi import initialize
-#from dask.distributed import Client, LocalCluster
-#dask.config.set(scheduler='processes')
-#dask.config.set(num_workers=n_workers)
 
 def mem_profile() -> str: 
     """
-    Return memory usage, string
+    Return memory usage, str
     """
     mem_use = str(round(100 - psutil.virtual_memory().percent,4))+'% of '+str(round(psutil.virtual_memory().total/1e+9,3))+' GB RAM'
     return mem_use
@@ -44,21 +38,37 @@ country_dict = {'DZA' : ['algeria', 'Africa', 'Algeria'], 'AGO' : ['angola', 'Af
 
 def code_to_geofabrik(country_code: str, country_dict: dict = country_dict) -> str:
     """
-    Returns file name of Geofabrik file to a corresponding country_code, string
+    Map country_codes to Geofabrik country name
+    Args:
+        country_code: str, country code in ISO 3166-1 alpha-3 format
+        country_dict: dictionary, maps country codes to Geofabrik file names
+    Returns:
+        Name of Geofabrik country for a corresponding country_code, str
     """
     geofabrik_name = [value[0] for (key, value) in country_dict.items() if key == country_code][0]
     return geofabrik_name
 
 def geofabrik_to_code(geofabrik_name: str, country_dict: dict = country_dict) -> str:
     """
-    Returns more than one country code for the following countries {'israel-and-palestine' : ['PSE', 'ISR'], 'malaysia-singapore-brunei' : ['BRN', 'MYS', 'SGP'], 'morocco' : ['MAR', 'ESH'], 'senegal-and-gambia' : ['GMB', 'SEN']}
+    Map Geofabrik file names to country_codes in ISO 3166-1 alpha-3 format
+    Args:
+        geofabrik_name: str, Geofabrik country name
+        country_dict: dictionary, maps country codes to Geofabrik file names
+    Returns:
+        File name of country_code for a corresponding Geofabrik country name, str
+        Returns more than one country code for the following countries {'israel-and-palestine' : ['PSE', 'ISR'], 'malaysia-singapore-brunei' : ['BRN', 'MYS', 'SGP'], 'morocco' : ['MAR', 'ESH'], 'senegal-and-gambia' : ['GMB', 'SEN']}
     """
     country_code = [key for (key, value) in country_dict.items() if value[0] == geofabrik_name]
     return country_code
 
 def read_osm(country_code: str, directory_path: Union[str, Path]) -> gpd.GeoDataFrame:
     """
-    Return OSM
+    Read in OSM data ingested from Geofabrik using the download_job.sh script and convert to pipeline-ready format
+    Args:
+        country_code: str, country codes in ISO 3166-1 alpha-3 format
+        directory_path: str or Path, parent directory holding OSM linestring data from Geofabrik
+    Returns:
+        GeoDataFrame containing OSM linestrings for a particular country
     """
     geofabrik_name = code_to_geofabrik(country_code = country_code)
     data = gpd.read_file(Path(directory_path) / f'{geofabrik_name}-latest-linestring.geojson')
@@ -66,9 +76,6 @@ def read_osm(country_code: str, directory_path: Union[str, Path]) -> gpd.GeoData
     return data
 
 def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, output_dir: Path):
-
-    #initialize(local_directory=os.path.dirname(Path(log_file))) 
-    #client = Client() # Client(n_workers=n_workers)
 
     logging.getLogger().setLevel(logging.INFO)
     logging.basicConfig(filename=Path(log_file), format='%(asctime)s:%(message)s: ', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
@@ -134,6 +141,7 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         
         # Trim coastline if applicable
         if osm_gpd[osm_gpd['natural'].isin(['coastline'])].shape[0] > 0:
+            logging.info(f"Trim coastline")
             t0 = time.time()
             gadm_gpd_trim = prepare.trim_coastline(gadm_data = gadm_gpd, osm_data = osm_gpd)
             trimmed_area_percent = (sum(gadm_gpd.to_crs(3395).area/10**6)-sum(gadm_gpd_trim.to_crs(3395).area/10**6))/sum(gadm_gpd_trim.to_crs(3395).area/10**6)
@@ -160,9 +168,6 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         osm_streets.to_parquet(Path(street_dir) / f'streets_{country_code}.parquet', compression='snappy')
         t1 = time.time()
         logging.info(f"Writing osm_streets ({osm_streets.shape}) from osm_gpd ({osm_gpd.shape}) ./streets_{country_code}.parquet, {mem_profile()}, {str(round(t1-t0,3))} seconds")
-        # Set 30 MB per partition (Dask recommends 100 MB)
-        mem_estimate = osm_gpd.memory_usage(index=True, deep=True).sum()/1000000 + gadm_gpd.memory_usage(index=True, deep=True).sum()/1000000
-        partition_count = round(mem_estimate/30)
         del osm_gpd
         
         gadm_list = list(gadm_gpd[gadm_col].unique())
@@ -171,17 +176,11 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         block_bulk = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
 
         # Build blocks for each GADM
-        logging.info(f"Apply over GADMs")
+        logging.info(f"Build blocks")
 
         t0 = time.time()
-        #bag_sequence = db.from_sequence(gadm_list, npartitions = partition_count) 
-        #compute_sequence = bag_sequence.map(lambda x: prepare.build_blocks(gadm_data = gadm_gpd, osm_data = osm_pygeos, gadm_column = gadm_col, gadm_code = x))
-        #output_sequence = compute_sequence.compute()
-        #for i,j in enumerate(output_sequence): block_bulk = pd.concat([block_bulk, output_sequence[i]], ignore_index=True)
-
         output_map = list(map(lambda x: prepare.build_blocks(gadm_data = gadm_gpd, osm_data = osm_pygeos, gadm_column = gadm_col, gadm_code = x), gadm_list))
         for i,j in enumerate(output_map): block_bulk = pd.concat([block_bulk, output_map[i]], ignore_index=True)
-        
         #check_area = np.sum(gadm_blocks['geometry'].to_crs(3395).area)/np.sum(gadm_gpd[gadm_gpd[gadm_col] == i]['geometry'].to_crs(3395).area)
         #if (check_area/1) < .99: logging.info(f"Area proportion: {round(check_area,4)}")
         t1 = time.time()
@@ -198,7 +197,6 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
 
 def setup(args=None):    
     parser = argparse.ArgumentParser(description='Build blocks.')
-    #parser.add_argument('--n_workers', required=False, type=int, dest="n_workers", help="Number of distributed workers") 
     parser.add_argument('--log_file', required=False, type=Path, dest="log_file", help="Path to write log file") 
     parser.add_argument('--country_chunk', required=False, type=str, dest="country_chunk", nargs='+', help="List of country codes following ISO 3166-1 alpha-3 format")
     parser.add_argument('--osm_dir', required=True, type=Path, dest="osm_dir", help="OSM directory")
