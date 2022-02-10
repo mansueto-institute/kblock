@@ -1,1 +1,12 @@
-dev/__pycache__/
+*/__pycache__/
+.vscode
+.DS_Store
+__pycache__/
+.*
+!.gitignore
+.env
+.vscode
+.DS_Store
+__pycache__/
+.*
+!.gitignore
