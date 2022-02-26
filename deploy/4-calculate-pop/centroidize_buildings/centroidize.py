@@ -6,6 +6,7 @@ import pyarrow
 import dask_geopandas as dgpd
 import geopandas as gpd
 import pandas as pd
+import glob
 
 def centroidize(top_building_dir: Union[str, Path]):
 	# For each building file
@@ -15,10 +16,11 @@ def centroidize(top_building_dir: Union[str, Path]):
 	# For each written geojson
 	# 	Read in file
 	# Aggregate 
-
 	if isinstance(top_building_dir, str):
 		top_building_dir = Path(top_building_dir)
-	building_files_list = top_building_dir.rglob("buildings*")
+	building_files_list = top_building_dir.rglob("buildings_*")
+	# for building_file in building_files_list:
+	# 	centroidize_helper(building_file)
 	map(centroidize_helper, list(building_files_list))
 	country_building_dirs = [d for d in top_building_dir.iterdir() if d.is_dir()]
 	map(aggregate_helper, country_building_dirs)
@@ -30,12 +32,14 @@ def centroidize(top_building_dir: Union[str, Path]):
 
 	
 def centroidize_helper(building_file_path: Path):
+	print(building_file_path)
 	building_file = gpd.read_file(building_file_path).set_crs(3395, allow_override=True)
 	building_file['building_area'] = building_file.area
 	building_file.geometry = building_file.geometry.centroid
 	building_file = building_file.set_crs(4326, allow_override=True)
 	building_file = building_file[['osm_id', 'gadm', 'gadm_code', 'building_area', 'geometry']]
 	output_file_name = building_file_path.parent / ('centroid_' + building_file_path.stem + building_file_path.suffix)
+	print(f'Wrote {output_file_name}')
 	building_file.to_file(output_file_name, driver='GeoJSON')
 
 
