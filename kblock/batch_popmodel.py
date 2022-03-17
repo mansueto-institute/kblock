@@ -103,28 +103,55 @@ def vectorize_pixels(xr_array: xr.DataArray) ->  xr.Dataset:
     return xr_data
 
 
-def read_tif_dir(dir_path: Union[str, Path], country_code: str, gadm_code_list: list, gadm_gpd: gpd.GeoDataFrame) -> xr.DataArray:
-    """ Read GeoTiff or .tif file format for a particular country
+#def read_tif_dir(dir_path: Union[str, Path], country_code: str, gadm_code_list: list, gadm_gpd: gpd.GeoDataFrame) -> xr.DataArray:
+#    """ Read GeoTiff or .tif file format for a particular country
+#    Args:
+#        dir_path: string or Path to the file to open
+#        country_code: string of 3-digit country code 
+#        gadm_code: list of gadm_code
+#        gadm_gpd: geopandas.GeoDataFrame of gadm_code and geometries
+#    Returns:
+#        xarray.DataArray of 'x' and 'y 'dimension and single band population value
+#    """
+#    tif_list = os.listdir(dir_path)
+#    tif_list = [x for x in ['landscan', 'worldpop'] if x in set(tif_list)]
+#    for i in tif_list:
+#        raster_files = (os.listdir(Path(dir_path) / i))
+#        input_geom = gpd.GeoSeries(gadm_gpd[gadm_gpd['gadm_code'].isin(gadm_code_list)].unary_union)
+#        if len(raster_files) == 1:
+#            raster_landscan = rxr.open_rasterio(filename = Path(dir_path) / i / raster_files[0], masked = True).rio.clip(input_geom, all_touched = True, from_disk = True)      
+#        if len(raster_files) > 1:
+#            file = list(filter(re.compile(country_code).search, sorted(list(os.listdir(Path(dir_path) / 'worldpop') ))))
+#            raster_worldpop = rxr.open_rasterio(filename = Path(dir_path) / i / file[0], masked = True).rio.clip(input_geom, all_touched = True, from_disk = True)
+#    return (raster_landscan, raster_worldpop);
+
+def read_tif_dir(dir_path: Union[str, Path], country_code: str, gadm_gpd: gpd.GeoDataFrame, gadm_code_list = []) -> xr.DataArray:
+    """ Read GeoTiff or .tif file format from LandScan and Worldpop for a particular country
     Args:
-        dir_path: string or Path to the file to open
-        country_code: string of 3-digit country code 
-        gadm_code: list of gadm_code
-        gadm_gpd: geopandas.GeoDataFrame of gadm_code and geometries
+        dir_path: string or Path to the file to open, director must have this structure:
+            Path(dir_path) / 'landscan/ls_2019.tif'
+            Path(dir_path) / f'worldpop/{country_code}.tif'
+        country_code: string of 3-digit country codes ('country_code')
+        gadm_gpd: geopandas.GeoDataFrame of GADM codes ('gadm_code') and geometries
+        gadm_code: list of gadm_codes (optional)
     Returns:
-        xarray.DataArray of 'x' and 'y 'dimension and single band population value
+        two xarray.DataArrays with 'x' and 'y 'dimension and single band population value,
+        first object is 'landscan' and second object is 'wordpop'
     """
     tif_list = os.listdir(dir_path)
     tif_list = [x for x in ['landscan', 'worldpop'] if x in set(tif_list)]
     for i in tif_list:
         raster_files = (os.listdir(Path(dir_path) / i))
-        input_geom = gpd.GeoSeries(gadm_gpd[gadm_gpd['gadm_code'].isin(gadm_code_list)].unary_union)
+        if gadm_code_list:
+            input_geom = gpd.GeoSeries(gadm_gpd[gadm_gpd['gadm_code'].isin(gadm_code_list)].unary_union)
+        else:
+            input_geom = gpd.GeoSeries(gadm_gpd[gadm_gpd['country_code'] == country_code].unary_union)
         if len(raster_files) == 1:
             raster_landscan = rxr.open_rasterio(filename = Path(dir_path) / i / raster_files[0], masked = True).rio.clip(input_geom, all_touched = True, from_disk = True)      
         if len(raster_files) > 1:
             file = list(filter(re.compile(country_code).search, sorted(list(os.listdir(Path(dir_path) / 'worldpop') ))))
             raster_worldpop = rxr.open_rasterio(filename = Path(dir_path) / i / file[0], masked = True).rio.clip(input_geom, all_touched = True, from_disk = True)
     return (raster_landscan, raster_worldpop);
-
 
 def merge_pixels(xr_array: xr.DataArray, xr_name: str, gpd_dataframe: gpd.GeoDataFrame) -> pd.DataFrame:  
     """Vectorize a xarray Dataset representing a raster by extracting corner coordinates of pixels
@@ -248,7 +275,7 @@ def allocate_population(pixel_data: pd.DataFrame, population_col: str, country_c
     block_population = population_buildings[['building_id','country_code','gadm_code','block_id','building_area','building_area_pixel','building_population']]
     block_population = block_population.groupby(['block_id','gadm_code','country_code']).agg({'building_area': 'sum','building_population':'sum'}).reset_index()
 
-    print_building_population = str(round(sum(block_population['building_population']),2)) + ' ' + str(round(sum(block_population['building_population'])/sum(pixel_data[population_col]),3)*100) + '%'
+    print_building_population = str(round(sum(block_population['building_population']),2)) + ' ' + str(round((sum(block_population['building_population'])/sum(pixel_data[population_col]))*100,3)) + '%'
     print('Population allocated by building area: ', print_building_population)
 
     # Subset residual pixels that do not intersect buildings points
@@ -296,7 +323,7 @@ def allocate_population(pixel_data: pd.DataFrame, population_col: str, country_c
         # Remove blocks with no building area
         block_population = block_population[block_population['building_area'] > 0 | block_population['building_area'].notnull()]
 
-        print_allocated_population = str(round(sum(block_population['building_population']),2)) + ' ' + str(round(sum(block_population['building_population'])/sum(pixel_data[population_col]),3)*100) + '%'
+        print_allocated_population = str(round(sum(block_population['building_population']),2)) + ' ' + str(round((sum(block_population['building_population'])/sum(pixel_data[population_col]))*100,3)) + '%'
         print('Running sum of population allocated: ',print_allocated_population)
         print_blocks_no_buildings_population = str(round(pop_residual,2))
         print('Population allocated to blocks with no buildings: ', print_blocks_no_buildings_population)
@@ -326,15 +353,15 @@ def allocate_population(pixel_data: pd.DataFrame, population_col: str, country_c
     block_universe['building_population'] = 0
     block_universe = block_universe[~block_universe['block_id'].isin(block_population['block_id'].unique())]
     block_population = pd.concat([block_population, block_universe], ignore_index=True)
-    print_share_overall = str(round(sum(block_population['building_population'])/sum(pixel_data[population_col]),3)*100) + '%'
+    print_share_overall = str(round((sum(block_population['building_population'])/sum(pixel_data[population_col]))*100,3)) + '%'
     print('Allocated share overall: ', print_share_overall)
 
     # Create target area dummy
     if gadm_code_list:
         block_population.loc[block_population['gadm_code'].isin(gadm_code_list), 'target_area'] = int(1)
         block_population['target_area'] = block_population['target_area'].fillna(0)
-        print_share_target = str(round(sum(block_population[block_population['target_area'] == 1]['building_population'])/sum(pixel_data[population_col]),3)*100) + '%'
-        print('Allocated share in GADM list area: ',print_share_target)
+        print_share_target = str(round((sum(block_population[block_population['target_area'] == 1]['building_population'])/sum(pixel_data[population_col])*100),3)) + '%'
+        print('Allocated share in GADM target area: ',print_share_target)
         if all_area is False:
             block_population = block_population[block_population['target_area'] == 1]
             block_population = block_population.drop(['target_area'], axis=1)
@@ -402,20 +429,22 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, blocks_dir: Path, 
         gadm_gpd['country_code'] = country_code
         all_gadm_gpd = pd.concat([all_gadm_gpd, gadm_gpd[['gadm_code', 'country_code', 'geometry']]], ignore_index=True)
     all_gadm_gpd['gadm_region'] = all_gadm_gpd['gadm_code'].str.split('.').str[0] + '.' + all_gadm_gpd['gadm_code'].str.split('.').str[1]
-
+    logging.info('---------')
+    logging.info('---------')
+    
     # Run population model
     for country_code in country_list: 
         logging.info(f"Running: {country_code}")
+        c0 = time.time()
         logging.info(f"Node status: {mem_profile()}")
         country_gadm = all_gadm_gpd[all_gadm_gpd['country_code'] == country_code]
         region_list = country_gadm['gadm_region'].unique()
         blocks_pop_full = pd.DataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'landscan_population': pd.Series(dtype= 'float64'), 'worldpop_population': pd.Series(dtype= 'float64')})
         # Run for each region within each country
         logging.info(f"Regions: {region_list}")
-
         # passing in only regions in country or regions in target.... fix... 
         for region_code in region_list:
-            t0 = time.time()
+            r0 = time.time()
             logging.info(f'Reading raster for {region_code}')
             region_gadm_list = list(country_gadm[country_gadm['gadm_region'] == region_code]['gadm_code'].unique())
             ls, wp = read_tif_dir(dir_path = population_dir, country_code = country_code, gadm_code_list = region_gadm_list, gadm_gpd = all_gadm_gpd)
@@ -441,13 +470,25 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, blocks_dir: Path, 
             blocks_pop = blocks_pop[blocks_pop['block_id'].str.slice(start=0, stop = 3) == blocks_pop['country_code']]
             blocks_pop['landscan_population'] = blocks_pop['landscan_population'].fillna(0)
             blocks_pop['worldpop_population'] = blocks_pop['worldpop_population'].fillna(0)
-            t1 = time.time()
-            logging.info(f"{region_code}: {str(round((t1-t0)/60,3))} minutes")
+            r1 = time.time()
+            logging.info(f"{region_code}: {str(round((r1-r0)/60,3))} minutes")
             blocks_pop_full = pd.concat([blocks_pop_full, blocks_pop], ignore_index=True)
             del ls, wp, pixels_ls, pixels_wp, blocks_ls, blocks_wp, blocks_pop
         blocks_pop_full.to_parquet(path = Path(output_dir) / f'population_{country_code}.parquet', engine='pyarrow', compression='snappy')
-        del blocks_pop_full
+        ls_xr, wp_xr = read_tif_dir(dir_path = population_dir, country_code = country_code, gadm_gpd = all_gadm_gpd)
+        ls_xr.name = 'landscan'
+        wp_xr.name = 'worldpop'
+        ls_df = ls_xr.to_dataframe()
+        wp_df = wp_xr.to_dataframe()
+        logging.info('landscan: ' + str(round((sum(blocks_pop_full['landscan_population']) / sum(ls_df[ls_df['landscan'].notnull()]['landscan']))*100,4)) + f' % of ' + str(round(sum(ls_df[ls_df['landscan'].notnull()]['landscan']),3)))
+        logging.info('worldpop: ' + str(round((sum(blocks_pop_full['worldpop_population']) / sum(wp_df[wp_df['worldpop'].notnull()]['worldpop']))*100,4)) + f' % of ' + str(round(sum(wp_df[wp_df['worldpop'].notnull()]['worldpop']),3)))
+        c1 = time.time()
+        logging.info(f"{country_code}: {str(round((c1-c0)/60,3))} minutes")
+        logging.info('---------')
+        del blocks_pop_full, ls_xr, wp_xr, ls_df, wp_df 
     logging.info(f"Finished.")
+    logging.info('---------')
+    logging.info('---------')
 
 def setup(args=None):    
     parser = argparse.ArgumentParser(description='Estimate population at the street block level.')
