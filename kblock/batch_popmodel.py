@@ -419,7 +419,6 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, blocks_dir: Path, 
         blocks_pop_full = pd.DataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'landscan_population': pd.Series(dtype= 'float64'), 'worldpop_population': pd.Series(dtype= 'float64')})
         # Run for each region within each country
         logging.info(f"Regions: {region_list}")
-        # passing in only regions in country or regions in target.... fix... 
         for region_code in region_list:
             r0 = time.time()
             logging.info(f'Reading raster for {region_code}')
