@@ -102,29 +102,6 @@ def vectorize_pixels(xr_array: xr.DataArray) ->  xr.Dataset:
     
     return xr_data
 
-
-#def read_tif_dir(dir_path: Union[str, Path], country_code: str, gadm_code_list: list, gadm_gpd: gpd.GeoDataFrame) -> xr.DataArray:
-#    """ Read GeoTiff or .tif file format for a particular country
-#    Args:
-#        dir_path: string or Path to the file to open
-#        country_code: string of 3-digit country code 
-#        gadm_code: list of gadm_code
-#        gadm_gpd: geopandas.GeoDataFrame of gadm_code and geometries
-#    Returns:
-#        xarray.DataArray of 'x' and 'y 'dimension and single band population value
-#    """
-#    tif_list = os.listdir(dir_path)
-#    tif_list = [x for x in ['landscan', 'worldpop'] if x in set(tif_list)]
-#    for i in tif_list:
-#        raster_files = (os.listdir(Path(dir_path) / i))
-#        input_geom = gpd.GeoSeries(gadm_gpd[gadm_gpd['gadm_code'].isin(gadm_code_list)].unary_union)
-#        if len(raster_files) == 1:
-#            raster_landscan = rxr.open_rasterio(filename = Path(dir_path) / i / raster_files[0], masked = True).rio.clip(input_geom, all_touched = True, from_disk = True)      
-#        if len(raster_files) > 1:
-#            file = list(filter(re.compile(country_code).search, sorted(list(os.listdir(Path(dir_path) / 'worldpop') ))))
-#            raster_worldpop = rxr.open_rasterio(filename = Path(dir_path) / i / file[0], masked = True).rio.clip(input_geom, all_touched = True, from_disk = True)
-#    return (raster_landscan, raster_worldpop);
-
 def read_tif_dir(dir_path: Union[str, Path], country_code: str, gadm_gpd: gpd.GeoDataFrame, gadm_code_list = []) -> xr.DataArray:
     """ Read GeoTiff or .tif file format from LandScan and Worldpop for a particular country
     Args:
