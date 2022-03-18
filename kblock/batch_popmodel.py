@@ -234,92 +234,96 @@ def allocate_population(pixel_data: pd.DataFrame, population_col: str, country_c
     pixel_data = pixel_data.loc[pixel_data.astype(str).drop_duplicates().index]
     pixel_data = shapelify_pixels(pd_data = pixel_data)
 
-    print_total_pop = str(round(sum(pixel_data[population_col]),2))
+    population_total = sum(pixel_data[population_col])
+    print_total_pop = str(round(population_total,2))
     print('Total population: ', print_total_pop)
 
-    # Spatial join building points to pixel geodataframe
-    pixel_buildings_data = gpd.sjoin(left_df = pixel_data, right_df = buildings_full[['building_id','country_code','gadm_code','block_id','building_area','geometry']], how='left', predicate='intersects')
-    # Remove pixels with null buildings and blocks
-    population_buildings = pixel_buildings_data[(pixel_buildings_data['building_id'].notnull()) & (pixel_buildings_data['block_id'].notnull())].copy() 
+    block_population = pd.DataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'building_population': pd.Series(dtype= 'float64')})
 
-    print_building_pixels = str(len(population_buildings['pixel_hash'].unique())) + ' of ' + str(pixel_data.shape[0])
-    print('Pixels intersecting buildings: ',print_building_pixels)
-
-    # Allocate pixel population down to building points based on footprint area
-    population_buildings['building_area_pixel'] = population_buildings.groupby(['pixel_hash'])['building_area'].transform('sum')
-    population_buildings['building_population'] = population_buildings[population_col] * (population_buildings['building_area']/population_buildings['building_area_pixel'])
-    # Aggregate building population to block_id level
-    block_population = population_buildings[['building_id','country_code','gadm_code','block_id','building_area','building_area_pixel','building_population']]
-    block_population = block_population.groupby(['block_id','gadm_code','country_code']).agg({'building_area': 'sum','building_population':'sum'}).reset_index()
-
-    print_building_population = str(round(sum(block_population['building_population']),2)) + ' ' + str(round((sum(block_population['building_population'])/sum(pixel_data[population_col]))*100,3)) + '%'
-    print('Population allocated by building area: ', print_building_population)
-
-    # Subset residual pixels that do not intersect buildings points
-    population_residual = pixel_data[~pixel_data['pixel_hash'].isin(population_buildings['pixel_hash'].unique())].copy()
-    pop_residual = sum(population_residual[population_col])
-
-    print_block_population = str(round(pop_residual,2))
-    print('Population not intersecting buildings to reallocate: ',print_block_population)
-
-    # Allocate residual of population that did not intersect buildings by block area
-    if pop_residual > 0: 
-        population_residual['pixel_area'] = population_residual.to_crs(3395).area
-        population_residual = population_residual[['pixel_hash','x','y',population_col,'pixel_area','geometry']]
-
-        print_residual_pixels = str(population_residual.shape[0]) + ' of ' + str(pixel_data.shape[0])
-        print('Residual pixels to allocate by block area: ',print_residual_pixels)
-
-        # Form new geometries based on overlap between residual pixels and block_id
-        #population_residual.geometry = population_residual.buffer(0)
-        #blocks_full.geometry = blocks_full.buffer(0)
-        block_overlay = gpd.overlay(population_residual, blocks_full, how='intersection', keep_geom_type=True) 
-        block_overlay = block_overlay[block_overlay[population_col].notnull()]
-        block_overlay['pixel_area_split'] = block_overlay.to_crs(3395).area
-
-        # Allocate residual population by block areas that overlaps with pixel area
-        block_overlay = block_overlay[block_overlay['block_id'].notnull()]
-        block_overlay['pixel_area_split_total_notnull'] = block_overlay.groupby(['pixel_hash'])['pixel_area_split'].transform('sum')
-        block_overlay['building_population'] = block_overlay[population_col] * (block_overlay['pixel_area_split'] / block_overlay['pixel_area_split_total_notnull'])
-        
-        # Aggregate block residual population to block_id level
-        block_population_residual = block_overlay.groupby(['block_id','gadm_code','country_code']).agg({'building_population': 'sum'}).reset_index()
-        block_population_residual['building_area'] = 0
-
-        # Combine block_id population totals allocated to buildings and residual population allocated to blocks
-        block_population = pd.concat([block_population, block_population_residual], ignore_index=True)
+    # Check if pixel population is above 0
+    if population_total > 0:
+        # Spatial join building points to pixel geodataframe
+        pixel_buildings_data = gpd.sjoin(left_df = pixel_data, right_df = buildings_full[['building_id','country_code','gadm_code','block_id','building_area','geometry']], how='left', predicate='intersects')
+        # Remove pixels with null buildings and blocks
+        population_buildings = pixel_buildings_data[(pixel_buildings_data['building_id'].notnull()) & (pixel_buildings_data['block_id'].notnull())].copy() 
+    
+        print_building_pixels = str(len(population_buildings['pixel_hash'].unique())) + ' of ' + str(pixel_data.shape[0])
+        print('Pixels intersecting buildings: ',print_building_pixels)
+    
+        # Allocate pixel population down to building points based on footprint area
+        population_buildings['building_area_pixel'] = population_buildings.groupby(['pixel_hash'])['building_area'].transform('sum')
+        population_buildings['building_population'] = population_buildings[population_col] * (population_buildings['building_area']/population_buildings['building_area_pixel'])
+        # Aggregate building population to block_id level
+        block_population = population_buildings[['building_id','country_code','gadm_code','block_id','building_area','building_area_pixel','building_population']]
         block_population = block_population.groupby(['block_id','gadm_code','country_code']).agg({'building_area': 'sum','building_population':'sum'}).reset_index()
+    
+        print_building_population = str(round(sum(block_population['building_population']),2)) + ' ' + str(round((sum(block_population['building_population'])/population_total)*100,3)) + '%'
+        print('Population allocated by building area: ', print_building_population)
+    
+        # Subset residual pixels that do not intersect buildings points
+        population_residual = pixel_data[~pixel_data['pixel_hash'].isin(population_buildings['pixel_hash'].unique())].copy()
+        pop_residual = sum(population_residual[population_col])
+        print_block_population = str(round(pop_residual,2))
+        print('Population not intersecting buildings to reallocate: ',print_block_population)
 
-        # Filter out mis-aligned geometries (occurs rarely due to minute differences between block geometries and GADM geometries)
-        block_population = block_population[block_population['block_id'].str.rsplit('_', 1, expand=True)[0] == block_population['gadm_code']]
-        block_population = block_population[block_population['block_id'].str.slice(start=0, stop = 3) == block_population['country_code']]
-
-        # Zero out residual population allocated to block_id level with no building area and redistribute to gadm_code level
-        pop_adjust = block_population[block_population['building_area'] == 0].groupby(['gadm_code']).agg({'building_population': 'sum'}).reset_index().rename(columns={"building_population":"building_population_adjust"})
-        pop_residual = sum(pop_adjust['building_population_adjust'])
-        # Remove blocks with no building area
-        block_population = block_population[block_population['building_area'] > 0 | block_population['building_area'].notnull()]
-
-        print_allocated_population = str(round(sum(block_population['building_population']),2)) + ' ' + str(round((sum(block_population['building_population'])/sum(pixel_data[population_col]))*100,3)) + '%'
-        print('Running sum of population allocated: ',print_allocated_population)
-        print_blocks_no_buildings_population = str(round(pop_residual,2))
-        print('Population allocated to blocks with no buildings: ', print_blocks_no_buildings_population)
-
-        # Re-allocate residual population allocated to blocks with no buildings to the GADM level by building area
+        # Allocate residual of population that did not intersect buildings by block area
         if pop_residual > 0: 
-            block_population = pd.merge(left = block_population, right = pop_adjust, how='left', on='gadm_code')
-            block_population['building_population_adjust'] = block_population['building_population_adjust'].fillna(0)
-            block_population['building_area_gadm'] = block_population.groupby(['gadm_code'])['building_area'].transform('sum')
-            block_population['building_population'] = (block_population['building_population_adjust'] * (block_population['building_area']/block_population['building_area_gadm'])) + block_population['building_population']
-
-            # Re-allocate any remaining residual population based to country scale block_id level building area shares (should be a small number from pixels touching no blocks or buildings)
-            pop_residual = (sum(pixel_data[population_col])-sum(block_population['building_population']))
-
-            print_no_blocks_no_buildings_population = str(round(pop_residual,2))
-            print('Population not touching blocks or buildings: ',print_no_blocks_no_buildings_population)
+            population_residual['pixel_area'] = population_residual.to_crs(3395).area
+            population_residual = population_residual[['pixel_hash','x','y',population_col,'pixel_area','geometry']]
+    
+            print_residual_pixels = str(population_residual.shape[0]) + ' of ' + str(pixel_data.shape[0])
+            print('Residual pixels to allocate by block area: ',print_residual_pixels)
+    
+            # Form new geometries based on overlap between residual pixels and block_id
+            #population_residual.geometry = population_residual.buffer(0)
+            #blocks_full.geometry = blocks_full.buffer(0)
+            block_overlay = gpd.overlay(population_residual, blocks_full, how='intersection', keep_geom_type=True) 
+            block_overlay = block_overlay[block_overlay[population_col].notnull()]
+            block_overlay['pixel_area_split'] = block_overlay.to_crs(3395).area
+    
+            # Allocate residual population by block areas that overlaps with pixel area
+            block_overlay = block_overlay[block_overlay['block_id'].notnull()]
+            block_overlay['pixel_area_split_total_notnull'] = block_overlay.groupby(['pixel_hash'])['pixel_area_split'].transform('sum')
+            block_overlay['building_population'] = block_overlay[population_col] * (block_overlay['pixel_area_split'] / block_overlay['pixel_area_split_total_notnull'])
+            
+            # Aggregate block residual population to block_id level
+            block_population_residual = block_overlay.groupby(['block_id','gadm_code','country_code']).agg({'building_population': 'sum'}).reset_index()
+            block_population_residual['building_area'] = 0
+    
+            # Combine block_id population totals allocated to buildings and residual population allocated to blocks
+            block_population = pd.concat([block_population, block_population_residual], ignore_index=True)
+            block_population = block_population.groupby(['block_id','gadm_code','country_code']).agg({'building_area': 'sum','building_population':'sum'}).reset_index()
+    
+            # Filter out mis-aligned geometries (occurs rarely due to minute differences between block geometries and GADM geometries)
+            block_population = block_population[block_population['block_id'].str.rsplit('_', 1, expand=True)[0] == block_population['gadm_code']]
+            block_population = block_population[block_population['block_id'].str.slice(start=0, stop = 3) == block_population['country_code']]
+    
+            # Zero out residual population allocated to block_id level with no building area and redistribute to gadm_code level
+            pop_adjust = block_population[block_population['building_area'] == 0].groupby(['gadm_code']).agg({'building_population': 'sum'}).reset_index().rename(columns={"building_population":"building_population_adjust"})
+            pop_residual = sum(pop_adjust['building_population_adjust'])
+            # Remove blocks with no building area
+            block_population = block_population[block_population['building_area'] > 0 | block_population['building_area'].notnull()]
+    
+            print_allocated_population = str(round(sum(block_population['building_population']),2)) + ' ' + str(round((sum(block_population['building_population'])/population_total)*100,3)) + '%'
+            print('Running sum of population allocated: ',print_allocated_population)
+            print_blocks_no_buildings_population = str(round(pop_residual,2))
+            print('Population allocated to blocks with no buildings: ', print_blocks_no_buildings_population)
+    
+            # Re-allocate residual population allocated to blocks with no buildings to the GADM level by building area
             if pop_residual > 0: 
-                if include_residual is True:
-                    block_population['building_population'] = ((sum(pixel_data[population_col])-sum(block_population['building_population'])) * (block_population['building_area']/sum(block_population['building_area']))) + block_population['building_population']
+                block_population = pd.merge(left = block_population, right = pop_adjust, how='left', on='gadm_code')
+                block_population['building_population_adjust'] = block_population['building_population_adjust'].fillna(0)
+                block_population['building_area_gadm'] = block_population.groupby(['gadm_code'])['building_area'].transform('sum')
+                block_population['building_population'] = (block_population['building_population_adjust'] * (block_population['building_area']/block_population['building_area_gadm'])) + block_population['building_population']
+    
+                # Re-allocate any remaining residual population based to country scale block_id level building area shares (should be a small number from pixels touching no blocks or buildings)
+                pop_residual = (population_total-sum(block_population['building_population']))
+    
+                print_no_blocks_no_buildings_population = str(round(pop_residual,2))
+                print('Population not touching blocks or buildings: ',print_no_blocks_no_buildings_population)
+                if pop_residual > 0: 
+                    if include_residual is True:
+                        block_population['building_population'] = ((population_total-sum(block_population['building_population'])) * (block_population['building_area']/sum(block_population['building_area']))) + block_population['building_population']   
     
     # Append block_id codes with no population
     block_population = block_population[['block_id','gadm_code','country_code','building_population']]
@@ -330,19 +334,21 @@ def allocate_population(pixel_data: pd.DataFrame, population_col: str, country_c
     block_universe['building_population'] = 0
     block_universe = block_universe[~block_universe['block_id'].isin(block_population['block_id'].unique())]
     block_population = pd.concat([block_population, block_universe], ignore_index=True)
-    print_share_overall = str(round((sum(block_population['building_population'])/sum(pixel_data[population_col]))*100,3)) + '%'
-    print('Allocated share overall: ', print_share_overall)
+    if population_total > 0:
+        print_share_overall = str(round((sum(block_population['building_population'])/population_total)*100,3)) + '%'
+        print('Allocated share overall: ', print_share_overall)
 
-    # Create target area dummy
+    # Create target area flag
     if gadm_code_list:
         block_population.loc[block_population['gadm_code'].isin(gadm_code_list), 'target_area'] = int(1)
         block_population['target_area'] = block_population['target_area'].fillna(0)
-        print_share_target = str(round((sum(block_population[block_population['target_area'] == 1]['building_population'])/sum(pixel_data[population_col])*100),3)) + '%'
-        print('Allocated share in GADM target area: ',print_share_target)
+        if population_total > 0:
+            print_share_target = str(round((sum(block_population[block_population['target_area'] == 1]['building_population'])/population_total*100),3)) + '%'
+            print('Allocated share in GADM target area: ',print_share_target)
         if all_area is False:
             block_population = block_population[block_population['target_area'] == 1]
             block_population = block_population.drop(['target_area'], axis=1)
-    
+
     block_population = block_population.rename(columns={"building_population":str(population_col + '_population')})
     
     return block_population
@@ -417,16 +423,20 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, blocks_dir: Path, 
         country_gadm = all_gadm_gpd[all_gadm_gpd['country_code'] == country_code]
         region_list = country_gadm['gadm_region'].unique()
         blocks_pop_full = pd.DataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'landscan_population': pd.Series(dtype= 'float64'), 'worldpop_population': pd.Series(dtype= 'float64')})
+        
         # Run for each region within each country
         logging.info(f"Regions: {region_list}")
         for region_code in region_list:
             r0 = time.time()
+
             logging.info(f'Reading raster for {region_code}')
             region_gadm_list = list(country_gadm[country_gadm['gadm_region'] == region_code]['gadm_code'].unique())
             ls, wp = read_tif_dir(dir_path = population_dir, country_code = country_code, gadm_code_list = region_gadm_list, gadm_gpd = all_gadm_gpd)
+
             logging.info('Merge pixels to GADMs')
             pixels_ls = merge_pixels(xr_array = ls, xr_name = 'landscan', gpd_dataframe = all_gadm_gpd)
             pixels_wp = merge_pixels(xr_array = wp, xr_name = 'worldpop', gpd_dataframe = all_gadm_gpd)
+
             logging.info('Allocate population')
             log_file_detail = Path(os.path.dirname(log_file)) / 'log_pop_verbose.log'
             with open(log_file_detail, 'a') as f:
@@ -450,18 +460,32 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, blocks_dir: Path, 
             logging.info(f"{region_code}: {str(round((r1-r0)/60,3))} minutes")
             blocks_pop_full = pd.concat([blocks_pop_full, blocks_pop], ignore_index=True)
             del ls, wp, pixels_ls, pixels_wp, blocks_ls, blocks_wp, blocks_pop
-        blocks_pop_full.to_parquet(path = Path(output_dir) / f'population_{country_code}.parquet', engine='pyarrow', compression='snappy')
+        
+        # Check allocation and re-scale if necessary (rare, happens with islands)
         ls_xr, wp_xr = read_tif_dir(dir_path = population_dir, country_code = country_code, gadm_gpd = all_gadm_gpd)
         ls_xr.name = 'landscan'
         wp_xr.name = 'worldpop'
         ls_df = ls_xr.to_dataframe()
         wp_df = wp_xr.to_dataframe()
-        logging.info('landscan: ' + str(round((sum(blocks_pop_full['landscan_population']) / sum(ls_df[ls_df['landscan'].notnull()]['landscan']))*100,4)) + f' % of ' + str(round(sum(ls_df[ls_df['landscan'].notnull()]['landscan']),3)))
-        logging.info('worldpop: ' + str(round((sum(blocks_pop_full['worldpop_population']) / sum(wp_df[wp_df['worldpop'].notnull()]['worldpop']))*100,4)) + f' % of ' + str(round(sum(wp_df[wp_df['worldpop'].notnull()]['worldpop']),3)))
+        landscan_share = (sum(blocks_pop_full['landscan_population']) / sum(ls_df[ls_df['landscan'].notnull()]['landscan']))
+        worldpop_share = (sum(blocks_pop_full['worldpop_population']) / sum(wp_df[wp_df['worldpop'].notnull()]['worldpop']))
+        logging.info('landscan: ' + str(round(landscan_share*100,4)) + f' % of ' + str(round(sum(ls_df[ls_df['landscan'].notnull()]['landscan']),3)))
+        if landscan_share > 1:
+            blocks_pop_full['landscan_population'] = sum(ls_df[ls_df['landscan'].notnull()]['landscan']) * ((blocks_pop_full['landscan_population'])/(sum(blocks_pop_full['landscan_population'])))
+            landscan_share = (sum(blocks_pop_full['landscan_population']) / sum(ls_df[ls_df['landscan'].notnull()]['landscan']))
+            logging.info('rescaled landscan: ' + str(round(landscan_share*100,4)) + f' % of ' + str(round(sum(ls_df[ls_df['landscan'].notnull()]['landscan']),3)))
+        logging.info('worldpop: ' + str(round(worldpop_share*100,4)) + f' % of ' + str(round(sum(wp_df[wp_df['worldpop'].notnull()]['worldpop']),3)))
+        if worldpop_share > 1:
+            blocks_pop_full['worldpop_population'] = sum(wp_df[wp_df['worldpop'].notnull()]['worldpop']) * ((blocks_pop_full['worldpop_population'])/(sum(blocks_pop_full['worldpop_population'])))
+            worldpop_share = (sum(blocks_pop_full['worldpop_population']) / sum(wp_df[wp_df['worldpop'].notnull()]['worldpop']))
+            logging.info('rescaled worldpop: ' + str(round(worldpop_share*100,4)) + f' % of ' + str(round(sum(wp_df[wp_df['worldpop'].notnull()]['worldpop']),3)))
         c1 = time.time()
         logging.info(f"{country_code}: {str(round((c1-c0)/60,3))} minutes")
+
+        # Write population file
+        blocks_pop_full.to_parquet(path = Path(output_dir) / f'population_{country_code}.parquet', engine='pyarrow', compression='snappy')
         logging.info('---------')
-        del blocks_pop_full, ls_xr, wp_xr, ls_df, wp_df 
+        del blocks_pop_full, ls_xr, wp_xr, ls_df, wp_df, landscan_share, worldpop_share
     logging.info(f"Finished.")
     logging.info('---------')
     logging.info('---------')
