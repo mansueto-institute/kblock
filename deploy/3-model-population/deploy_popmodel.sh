@@ -1,6 +1,6 @@
 #!/bin/bash
 
-country_list=(SLE COG)
+country_list=(COG MUS)
 
 log_file_arg=/Users/nm/Downloads/production/jobs/log_pop.log
 country_chunk_arg=${country_list[@]}
