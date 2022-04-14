@@ -3,8 +3,8 @@
 #SBATCH --job-name=::COUNTRYCODE::
 #SBATCH --partition=broadwl
 #SBATCH --nodes=1
-#SBATCH --ntasks=10
-#SBATCH --ntasks-per-core=10
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=12
 #SBATCH --mem=56000
 #SBATCH --output=/project2/bettencourt/mnp/production/jobs/job_::COUNTRYCODE::.out
 #SBATCH --error=/project2/bettencourt/mnp/production/jobs/job_::COUNTRYCODE::.err

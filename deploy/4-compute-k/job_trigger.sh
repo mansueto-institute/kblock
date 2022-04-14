@@ -7,7 +7,7 @@ cnetid=nmarchio
 # Directory to place filled SBATCH templates (exclude trailing slash)
 template_dir=/project2/bettencourt/mnp/production/jobs/filled_templates
 # SBATCH template
-sbatch_file=/project2/bettencourt/mnp/production/repos/kblock/deploy/4-compute-k/deploy_compute.sbatch
+sbatch_file=/project2/bettencourt/mnp/production/repos/kblock/deploy/4-compute-k/deploy_kblock.sbatch
 
 # Path of input files and prefix
 input_start=/project2/bettencourt/mnp/production/inputs/buildingpoints/buildings_
