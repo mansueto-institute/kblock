@@ -16,7 +16,7 @@
 # conda install -c conda-forge xarray --yes
 # conda install -c conda-forge rioxarray --yes
 
-country_chunk=(DJI SYC STP)
+country_chunk=(DJI SYC STP LBR)
 
 log_file_arg=/Users/nm/Downloads/production/jobs/log_k.log
 country_chunk_arg=${country_chunk[@]}

@@ -192,12 +192,14 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
         parcel_residual = np.sum(pygeos.get_num_geometries(block_parcels))
 
         while parcel_residual > 0:
-
-            block_reduced = pygeos.coverage_union_all(block_parcels_outer)
+            
+            try: block_reduced = pygeos.coverage_union_all(block_parcels_outer)
+            except: block_reduced = pygeos.union_all(pygeos.make_valid(block_parcels_outer))
             block_parcels_inner = block_parcels[~pygeos.touches(block_parcels,block_reduced)]      
             block_parcels_outer = block_parcels[pygeos.touches(block_parcels,block_reduced)]  
             if np.sum(pygeos.get_num_geometries(block_parcels_outer)) == 0 and np.sum(pygeos.get_num_geometries(block_parcels_inner)) > 0:
-                block_reduced = pygeos.coverage_union_all(block_parcels_inner)
+                try: block_reduced = pygeos.coverage_union_all(block_parcels_inner)
+                except: block_reduced = pygeos.coverage_union_all(pygeos.make_valid(block_parcels_inner))
                 center = pygeos.get_coordinates(pygeos.centroid(block_reduced)).tolist()
                 block_interior = pygeos.apply(block_reduced, lambda x: ((x - center)*.9999 + center) )
                 block_exterior = pygeos.difference(block_reduced, block_interior)
@@ -326,11 +328,13 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
         parcel_residual = np.sum(pygeos.get_num_geometries(block_parcels))
         
         while parcel_residual > 0:
-            block_reduced = pygeos.coverage_union_all(block_parcels_outer)
+            try: block_reduced = pygeos.coverage_union_all(block_parcels_outer)
+            except: block_reduced = pygeos.union_all(pygeos.make_valid(block_parcels_outer))
             block_parcels_inner = block_parcels[~pygeos.touches(block_parcels,block_reduced)]      
             block_parcels_outer = block_parcels[pygeos.touches(block_parcels,block_reduced)] 
             if np.sum(pygeos.get_num_geometries(block_parcels_outer)) == 0 and np.sum(pygeos.get_num_geometries(block_parcels_inner)) > 0:
-                block_reduced = pygeos.coverage_union_all(block_parcels_inner)
+                try: block_reduced = pygeos.coverage_union_all(block_parcels_inner)
+                except: block_reduced = pygeos.coverage_union_all(pygeos.make_valid(block_parcels_inner))
                 center = pygeos.get_coordinates(pygeos.centroid(block_reduced)).tolist()
                 block_interior = pygeos.apply(block_reduced, lambda x: ((x - center)*.9999 + center) )
                 block_exterior = pygeos.difference(block_reduced, block_interior)
@@ -446,22 +450,35 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         gadm_list = list(country_blocks['gadm_code'].unique())
         del country_blocks
 
-        # Check for completed files and remove from GADM list
+#        # Check for completed files and remove from GADM list
+#        dask_folder_exists = os.path.isdir(Path(dask_dir) / f'{country_code}.parquet')
+#        if dask_folder_exists: 
+#            completed_gadm_list = dask.dataframe.read_parquet(path = Path(dask_dir) / f'{country_code}.parquet').compute()
+#            completed_gadm_list = list(completed_gadm_list['gadm_code'].unique())
+#            gadm_list = [x for x in gadm_list if x not in set(completed_gadm_list)] 
+#            logging.info(f"Completed GADMs: {completed_gadm_list}")
+#
+#        logging.info(f"GADMs to process: {gadm_list}")
+        #
+#        # Read in building data (first check if files are partially complete)
+#        if dask_folder_exists:
+#            if len(os.listdir(Path(dask_dir) / f'{country_code}.parquet')) >= 1:
+#                country_buildings = country_buildings[country_buildings['gadm_code'].isin(gadm_list)]
+#        else:
+#            country_buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_{country_code}.parquet')
+
+
+        country_buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_{country_code}.parquet')
         dask_folder_exists = os.path.isdir(Path(dask_dir) / f'{country_code}.parquet')
         if dask_folder_exists: 
-            completed_gadm_list = dask.dataframe.read_parquet(path = Path(dask_dir) / f'{country_code}.parquet').compute()
-            completed_gadm_list = list(completed_gadm_list['gadm_code'].unique())
-            gadm_list = [x for x in gadm_list if x not in set(completed_gadm_list)] 
-            logging.info(f"Completed GADMs: {completed_gadm_list}")
-
+            if len(os.listdir(Path(dask_dir) / f'{country_code}.parquet')) >= 1:            
+                completed_blocks = dask.dataframe.read_parquet(path = Path(dask_dir) / f'{country_code}.parquet').compute()
+                completed_gadm_list = list(completed_blocks['gadm_code'].unique())
+                logging.info(f"Completed GADMs: {completed_gadm_list}")
+                country_buildings = country_buildings[~country_buildings['gadm_code'].isin(completed_gadm_list)]
+                #gadm_list = [x for x in gadm_list if x in set(country_buildings['gadm_code'].unique())] 
+                del completed_blocks
         logging.info(f"GADMs to process: {gadm_list}")
-        
-        # Read in building data (first check if files are partially complete)
-        if dask_folder_exists:
-            if len(os.listdir(Path(dask_dir) / f'{country_code}.parquet')) >= 1:
-                country_buildings = country_buildings[country_buildings['gadm_code'].isin(gadm_list)]
-        else:
-            country_buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_{country_code}.parquet')
 
         # Reconcile building and block GADM lists 
         building_gadm_list = country_buildings['gadm_code'].unique()
