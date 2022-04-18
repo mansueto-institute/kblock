@@ -446,22 +446,18 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         gadm_list = list(country_blocks['gadm_code'].unique())
         del country_blocks
 
-        # Check for completed files and remove from GADM list
+        # Check for completed files and read building data
         dask_folder_exists = os.path.isdir(Path(dask_dir) / f'{country_code}.parquet')
         if dask_folder_exists: 
-            completed_gadm_list = dask.dataframe.read_parquet(path = Path(dask_dir) / f'{country_code}.parquet').compute()
-            completed_gadm_list = list(completed_gadm_list['gadm_code'].unique())
-            gadm_list = [x for x in gadm_list if x not in set(completed_gadm_list)] 
-            logging.info(f"Completed GADMs: {completed_gadm_list}")
-
-        logging.info(f"GADMs to process: {gadm_list}")
-        
-        # Read in building data (first check if files are partially complete)
-        if dask_folder_exists:
-            if len(os.listdir(Path(dask_dir) / f'{country_code}.parquet')) >= 1:
+            if len(os.listdir(Path(dask_dir) / f'{country_code}.parquet')) >= 1:            
+                country_buildings = dask.dataframe.read_parquet(path = Path(dask_dir) / f'{country_code}.parquet').compute()
+                completed_gadm_list = list(country_buildings['gadm_code'].unique())
+                gadm_list = [x for x in gadm_list if x not in set(completed_gadm_list)] 
+                logging.info(f"Completed GADMs: {completed_gadm_list}")
                 country_buildings = country_buildings[country_buildings['gadm_code'].isin(gadm_list)]
         else:
             country_buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_{country_code}.parquet')
+        logging.info(f"GADMs to process: {gadm_list}")
 
         # Reconcile building and block GADM lists 
         building_gadm_list = country_buildings['gadm_code'].unique()
@@ -472,6 +468,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         intersected_list = [building_gadm_list, gadm_list] 
         gadm_list = list(set.intersection(*map(set,intersected_list)))
         # logging.info(f"GADM list intersected: {gadm_list}")
+        
         # Filter the GADMs in buildings file to list that intersects block file
         country_buildings = country_buildings[country_buildings['gadm_code'].isin(gadm_list)]
 
