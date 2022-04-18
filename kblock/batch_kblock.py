@@ -482,6 +482,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         # Loop over the chunks
         for i in gadm_dict.items():
             gadm_chunk = i[1]
+            logging.info(f"GADM chunk: {gadm_chunk}")
             try:
                 blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True, filters = [('gadm_code', 'in', gadm_chunk)]).to_crs(3395)
             except Warning:
