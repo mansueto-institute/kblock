@@ -449,7 +449,6 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         country_blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True)    
         gadm_list = list(country_blocks['gadm_code'].unique())
         del country_blocks
-
         country_buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_{country_code}.parquet')
         dask_folder_exists = os.path.isdir(Path(dask_dir) / f'{country_code}.parquet')
         if dask_folder_exists: 
@@ -471,6 +470,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         intersected_list = [building_gadm_list, gadm_list] 
         gadm_list = list(set.intersection(*map(set,intersected_list)))
         # logging.info(f"GADM list intersected: {gadm_list}")
+        
         # Filter the GADMs in buildings file to list that intersects block file
         country_buildings = country_buildings[country_buildings['gadm_code'].isin(gadm_list)]
 
@@ -484,6 +484,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         # Loop over the chunks
         for i in gadm_dict.items():
             gadm_chunk = i[1]
+            logging.info(f"GADM chunk: {gadm_chunk}")
             try:
                 blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True, filters = [('gadm_code', 'in', gadm_chunk)]).to_crs(3395)
             except Warning:
