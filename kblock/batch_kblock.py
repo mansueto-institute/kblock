@@ -334,7 +334,7 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
             block_parcels_outer = block_parcels[pygeos.touches(block_parcels,block_reduced)] 
             if np.sum(pygeos.get_num_geometries(block_parcels_outer)) == 0 and np.sum(pygeos.get_num_geometries(block_parcels_inner)) > 0:
                 try: block_reduced = pygeos.coverage_union_all(block_parcels_inner)
-                except: block_reduced = pygeos.coverage_union_all(pygeos.make_valid(block_parcels_inner))
+                except: block_reduced = pygeos.union_all(pygeos.make_valid(block_parcels_inner))
                 center = pygeos.get_coordinates(pygeos.centroid(block_reduced)).tolist()
                 block_interior = pygeos.apply(block_reduced, lambda x: ((x - center)*.9999 + center) )
                 block_exterior = pygeos.difference(block_reduced, block_interior)
