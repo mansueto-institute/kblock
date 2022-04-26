@@ -33,10 +33,8 @@ def main(log_file: Path, ghsl_file: Path, country_chunk: str, blocks_dir: Path, 
 		blocks = blocks.to_crs(3395)
 		ghsl_df_sindex = ghsl_df.sindex
 		index_bulk = ghsl_df_sindex.query_bulk(blocks['geometry'], predicate='within')
-		# print(index_bulk)
 		ghsl_blocks_map = pd.DataFrame({'index_blocks': index_bulk[0], 'index_ghsl': index_bulk[1]})
 		ghsl_blocks_map = ghsl_blocks_map.merge(blocks, how='left', left_on='index_blocks', right_index=True)
-		# print(ghsl_blocks_map.head())
 		ghsl_blocks_map = ghsl_blocks_map.merge(ghsl_df, how='left', left_on='index_ghsl', right_index=True)
 		ghsl_blocks_map = ghsl_blocks_map.rename(columns={'geometry_x': 'blocks_geometry', 'geometry_y': 'ghsl_geometry'})
 		data = gpd.GeoDataFrame(ghsl_blocks_map, geometry='ghsl_geometry', crs=3395)
@@ -69,16 +67,19 @@ def main(log_file: Path, ghsl_file: Path, country_chunk: str, blocks_dir: Path, 
 		metros_blocks_map = metros_blocks_map.merge(blocks, how='outer', on='block_id')
 		metros_blocks_map['urban_agglomeration'] = ["missing" if isinstance(x, float) else x for x in metros_blocks_map['urban_agglomeration']]
 		metros_blocks_map['urban_center'] = ["missing" if isinstance(x, float) else x for x in metros_blocks_map['urban_center']]
-
-
-		data = metros_blocks_map[['block_id', 'gadm_code', 'country_code', 'urban_center', 'urban_agglomeration']]
+		
+		data = metros_blocks_map[['block_id', 'gadm_code_x', 'country_code_x', 'urban_center', 'urban_agglomeration']]
+		data = data.rename(columns={'gadm_code_x': 'gadm_code', 'country_code_x': 'country_code'})
 		assert (len(data['block_id']) == len(list(set(data['block_id']))))
 		data_filename = output_dir / (country+'_ghsl.parquet')
 		data.to_parquet(data_filename)
 
-		ancillary_data = metros_blocks_map.drop(columns=['index_blocks', 'index_metros', 'block_id', 'country_code', 'blocks_geometry',
-			                                     'Unique ID', 'ghsl_geometry', 'Area', 'metro_geometry', 'GHSL Area', 'urban_agglomeration'])
-		ancillary_data = ancillary_data.set_index(ancillary_data['urban_center'], drop=True)
+		ancillary_data = metros_blocks_map.drop(columns=['index_blocks', 'index_metros', 'country_code_x', 'blocks_geometry',
+			                                     'Unique ID', 'ghsl_geometry', 'Area', 'metro_geometry', 'GHSL Area', 'urban_agglomeration',
+							     'country_code_y', 'gadm_code_y'])
+		ancillary_data = pd.DataFrame(ancillary_data)
+		ancillary_data = ancillary_data.drop(columns='geometry')
+		ancillary_data = ancillary_data.rename(columns={'gadm_code_x':'gadm_code'})
 		ancillary_data_filename = ancillary_dir / (country+'_ancillary.parquet')
 		ancillary_data.to_parquet(ancillary_data_filename)
 
@@ -87,7 +88,7 @@ def setup(args=None):
 	parser = argparse.ArgumentParser(description='')
 	parser.add_argument('--log_file', required=False, type=Path, dest="log_file", help="Path to write log file") 
 	parser.add_argument('--ghsl_file', required=True, type=str, dest='ghsl_file', help="Path to GHSL parquet file")
-    parser.add_argument('--country_chunk', required=False, type=str, dest="country_chunk", nargs='+', help="List of country codes following ISO 3166-1 alpha-3 format")
+	parser.add_argument('--country_chunk', required=False, type=str, dest="country_chunk", nargs='+', help="List of country codes following ISO 3166-1 alpha-3 format")
 	parser.add_argument('--blocks_dir', required=True, type=Path, dest="blocks_dir", help="Blocks directory")
 	parser.add_argument('--output_dir', required=True, type=Path, dest="output_dir", help="Output directory")
 	parser.add_argument('--ancillary_dir', required=True, type=Path, dest='ancillary_dir', help="Directory for ancillary data")
