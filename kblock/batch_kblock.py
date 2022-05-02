@@ -345,7 +345,7 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
             block_parcels_outer = block_parcels[pygeos.touches(block_parcels,block_reduced)] 
             if np.sum(pygeos.get_num_geometries(block_parcels_outer)) == 0 and np.sum(pygeos.get_num_geometries(block_parcels_inner)) > 0:
                 try: block_reduced = pygeos.coverage_union_all(block_parcels_inner)
-                except: block_reduced = pygeos.coverage_union_all(pygeos.make_valid(block_parcels_inner))
+                except: block_reduced = pygeos.union_all(pygeos.make_valid(block_parcels_inner))
                 center = pygeos.get_coordinates(pygeos.centroid(block_reduced)).tolist()
                 block_interior = pygeos.apply(block_reduced, lambda x: ((x - center)*.9999 + center) )
                 block_exterior = pygeos.difference(block_reduced, block_interior)
@@ -456,7 +456,6 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         country_blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True)    
         gadm_list = list(country_blocks['gadm_code'].unique())
         del country_blocks
-
         country_buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_{country_code}.parquet')
         dask_folder_exists = os.path.isdir(Path(dask_dir) / f'{country_code}.parquet')
         if dask_folder_exists: 
@@ -478,6 +477,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         intersected_list = [building_gadm_list, gadm_list] 
         gadm_list = list(set.intersection(*map(set,intersected_list)))
         # logging.info(f"GADM list intersected: {gadm_list}")
+        
         # Filter the GADMs in buildings file to list that intersects block file
         country_buildings = country_buildings[country_buildings['gadm_code'].isin(gadm_list)]
 
@@ -497,9 +497,10 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         for i in gadm_dict.items():
 
             gadm_chunk = i[1]
+            
             logging.info(f"Node status: {mem_profile()}")
             logging.info(f"Processing chunk: {gadm_chunk}")
-
+    
             try:
                 blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True, filters = [('gadm_code', 'in', gadm_chunk)]).to_crs(3395)
             except Warning:
