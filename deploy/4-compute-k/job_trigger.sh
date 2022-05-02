@@ -1,6 +1,6 @@
 #!/bin/bash
 
-max_number_of_jobs=20
+max_number_of_jobs=10
 cnetid=nmarchio
 
 template_dir=/project2/bettencourt/mnp/production/jobs/filled_templates
