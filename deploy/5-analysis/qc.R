@@ -60,6 +60,163 @@ ggsave(plot = plot_k_discrete, filename = paste0('/Users/nm/Desktop/qc/plotk_',c
 
 
 
+library(ggplot2)
+library(sf)
+library(tidyverse)
+library(viridis)
+library(patchwork)
+library(scales)
+library(tidygeocoder)
+library(readxl)
+library(units)
+library(ggsn)
+library(arrow)
+library(sfarrow)
+
+
+
+layers <- st_read_parquet('/Users/nm/Downloads/production/outputs/complexity/complexity_DJI_layers.parquet')
+blocks <- read_parquet('/Users/nm/Downloads/production/outputs/complexity/complexity_DJI.parquet')
+
+layers2 <- layers %>% st_drop_geometry() %>% 
+  filter(block_property == 'building-parcels') %>% 
+  group_by(block_id) %>%
+  summarize_at(vars(building_count, k_complexity), list(sum, max)) %>%
+  ungroup() %>%
+  select(block_id, building_count_fn1, k_complexity_fn2)
+
+blocks <- blocks %>%
+  left_join(., layers2, by = c('block_id' = 'block_id')) %>%
+  mutate(diff_building_count = building_count - building_count_fn1, 
+         diff_k_complexity = k_complexity - k_complexity_fn2)
+
+unique(blocks$diff_building_count)
+unique(blocks$diff_k_complexity)
+
+lay_viz <- layers %>% filter(block_id == 'DJI.3.1_1_3148')
+ggplot() + 
+  geom_sf(data = lay_viz  %>% filter(block_property == 'building-parcels'), 
+          aes(fill = k_complexity), color = 'black', alpha = .9) + 
+  scale_fill_viridis() + 
+  geom_sf(data = lay_viz  %>% filter(block_property == 'off-network-streets'),
+          color = 'green', fill = 'white', size =1, alpha = .8) + 
+  geom_sf(data = lay_viz  %>% filter(block_property == 'on-network-streets'),
+          color = 'red', fill = 'white', size =1, alpha = .8) 
+lay_viz
+
+
+lay_viz  %>% filter(block_property == 'on-network-streets') %>%
+  st_set_crs(4326) %>%
+  st_transform(3395) %>%
+  st_length()
+
+
+# fix connected linestrings
+
+
+
+
+
+
+
+# Paths --------------------------------------------------------------
+
+country_code = c('DJI','COG','ZAF','NGA')
+
+dir_path = '/Users/nm/Downloads/viz/'
+iso_code = country_code[1]
+
+metrics_c1 <-  read_parquet('/Users/nm/Downloads/production/outputs/complexity/run8/complexity_DJI.parquet')
+metrics_c2 <-  read_parquet('/Users/nm/Downloads/production/outputs/complexity/complexity_DJI.parquet')
+
+metrics_c1 <- metrics_c1 %>%
+  left_join(.,metrics_c2, by = c('block_id'='block_id') ) %>%
+  mutate(in_dif = street_access_length - length_of_internal_street,
+         ex_dif = distance_to_nearest_street - distance_to_external_street
+  )
+
+
+
+
+names(metrics_c1)
+
+write_csv(metrics_c,'/Users/nm/Desktop/c_DJI.csv')
+names(metrics_c)
+#blocks <-  st_read_parquet(paste0('/Users/nm/Downloads/production/outputs/blocks/blocks_',iso_code,'.parquet'))
+metrics <- read_parquet(paste0('/Users/nm/Downloads/production/outputs/kindex/kindex_',iso_code,'.parquet'))
+population <- read_parquet(paste0('/Users/nm/Downloads/production/outputs/population/population_',iso_code,'.parquet'))
+#streets <-  st_read('/Users/nm/Downloads/production/outputs/streets/streets_ZAF.parquet')
+
+names(metrics)
+names(population)
+
+metrics0 <-  read_parquet('/Users/nm/Downloads/production/outputs/complexity/run8/complexity_DJI.parquet') %>%
+  rename(building_layers0 = building_layers,
+         k_complexity0 = k_complexity) %>%
+  select(block_id, street_access_length, distance_to_nearest_street, building_layers0,  k_complexity0)
+
+metrics1 <-  read_parquet('/Users/nm/Downloads/production/outputs/complexity/run9/complexity_DJI.parquet') %>%
+  rename(building_layers1 = building_layers,
+         k_complexity1 = k_complexity,
+         length_of_internal_street1 = length_of_internal_street,
+         distance_to_external_street1 = distance_to_external_street) %>%
+  select(block_id, length_of_internal_street1, distance_to_external_street1, building_layers1,  k_complexity1)
+
+metrics2 <-  read_parquet('/Users/nm/Downloads/production/outputs/complexity/complexity_DJI.parquet')
+%>%
+  rename(building_layers2 = building_layers,
+         k_complexity2 = k_complexity,
+         length_of_internal_street2 = length_of_internal_street,
+         distance_to_external_street2 = distance_to_external_street) %>%
+  select(block_id, length_of_internal_street2, distance_to_external_street2, building_layers2,  k_complexity2)
+
+metrics <- metrics0 %>%
+  left_join(.,metrics1, by = c('block_id'='block_id')) %>%
+  left_join(.,metrics2, by = c('block_id'='block_id')) %>%
+  mutate(dif1 = k_complexity1 - k_complexity0 ,
+         dif2 = k_complexity2 - k_complexity0 ,
+         dif21 = k_complexity2 - k_complexity1 ,
+         len21 = length_of_internal_street2 - length_of_internal_street1,
+         dist21 = distance_to_external_street2 - distance_to_external_street1)
+
+
+
+#   
+metrics2 <-  read_parquet('/Users/nm/Downloads/production/outputs/complexity/run1/complexity_COG.parquet')
+names(metrics2)
+metrics2 <- metrics2 %>%
+  rename(building_layers2 = building_layers,
+         k_complexity2 = k_complexity) %>%
+  select(block_id, building_layers2,  k_complexity2)
+
+metrics3 <-  read_parquet('/Users/nm/Downloads/production/outputs/complexity/run2/complexity_COG.parquet')
+metrics3 <- metrics3 %>%
+  rename(building_layers3 = building_layers,
+         k_complexity3 = k_complexity) %>%
+  select(block_id, building_layers3,  k_complexity3)
+
+metrics4 <-  read_parquet('/Users/nm/Downloads/production/outputs/complexity/complexity_COG.parquet')
+metrics4 <- metrics4 %>%
+  rename(building_layers4 = building_layers,
+         k_complexity4 = k_complexity) %>%
+  select(block_id, building_layers4,  k_complexity4)
+
+metrics <- metrics %>%
+  left_join(.,metrics2, by = c('block_id'='block_id')) %>%
+  left_join(.,metrics3, by = c('block_id'='block_id')) %>%
+  left_join(.,metrics4, by = c('block_id'='block_id')) 
+
+metrics <- metrics %>%
+  mutate(dif2 = k_complexity2 - k_complexity ) %>%
+  mutate(dif3 = k_complexity3 - k_complexity ) %>%
+  mutate(dif4 = k_complexity4 - k_complexity ) %>%
+  mutate(dif32 = k_complexity3 - k_complexity2,
+         dif42 = k_complexity4 - k_complexity2)
+
+b <- st_read_parquet('/Users/nm/Downloads/production/inputs/buildingpoints/buildings_SYC.parquet')
+
+
+
 # +
 #   ggsn::scalebar(y.min = st_bbox(data)$ymin - .003, x.min = st_bbox(data)$xmin, 
 #                  y.max = st_bbox(data)$ymax, x.max = st_bbox(data)$xmax, location = 'bottomleft',
@@ -69,5 +226,59 @@ ggsave(plot = plot_k_discrete, filename = paste0('/Users/nm/Desktop/qc/plotk_',c
 #                  transform = FALSE,
 #                  dist_unit = "km")
 # (country_bbox$xmax - country_bbox$xmin)
+
+
+
+
+
+
+
+library(tidyverse)
+library(sf)
+library(lwgeom)
+library(tidycensus)
+library(scales)
+library(viridis)
+library(DT)
+library(shiny)
+library(ggplot2)
+library(readxl)
+library(patchwork)
+
+# Read the .Renviron file (only necessary fi you ran census_api_key()
+readRenviron("~/.Renviron")
+
+# Explore ACS application ----------------------------------------------------
+
+# Function to launch a mini Shiny app to look up Census variables
+explore_acs_vars <- function () { 
+  ui <- basicPage(h2("ACS Variable Search"), 
+                  tags$style('#display {height:100px; white-space: pre-wrap;}'),
+                  verbatimTextOutput('display', placeholder = TRUE),
+                  mainPanel(DT::dataTableOutput(outputId = "acs_table", width = '800px'))
+  )
+  server <- function(input, output, session) {
+    output$acs_table= DT::renderDataTable({ 
+      acs5_vars <- acs5_vars 
+    }, filter = "top", selection = 'multiple', options = list(columnDefs = list( list(className = "nowrap",width = '100px', targets = c(1,2))), pageLength = 20), server = TRUE) 
+    selected_index <- reactive({
+      acs5_vars %>% slice(input$acs_table_rows_selected) %>% pull(name)
+    })
+    output$display = renderPrint({
+      s = unique(input$acs_table_rows_selected)
+      if (length(s)) {cat(paste0("'",selected_index(),"'",collapse = ","))}
+    })
+  }
+  shinyApp(ui, server)
+}
+
+# Census Variables
+acs5_vars <- load_variables(year = 2020, dataset = c('acs5'), cache = FALSE) %>% 
+  separate(col = 'concept',  into = c('concept_main','concept_part'), sep = c(' BY '), remove = FALSE,extra = "merge") %>%
+  mutate(concept_part = case_when(is.na(concept_part) ~ 'TOTAL', TRUE ~ as.character(concept_part)))
+
+explore_acs_vars()
+
+
 
 
