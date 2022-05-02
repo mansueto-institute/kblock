@@ -10,7 +10,7 @@ input_dir=/project2/bettencourt/mnp/production/inputs/buildingpoints/
 input_prefix=buildings_
 input_suffix=.parquet
 
-output_dir=/project2/bettencourt/mnp/production/outputs/kindex/
+output_dir=/project2/bettencourt/mnp/production/outputs/complexity/
 output_prefix=kindex_
 output_suffix=.parquet
 
