@@ -158,7 +158,7 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
         if np.unique(pygeos.get_srid(street_linestrings))[0] == 4326:
             street_linestrings = transform_crs(geometry = street_linestrings, epsg_from = "EPSG:4326", epsg_to = "EPSG:3395")
         assert len(np.unique(pygeos.get_srid(street_linestrings))) == 1 and np.unique(pygeos.get_srid(street_linestrings))[0] == 3395, 'street_linestrings is not epsg:4326 or epsg:3395.' 
-        street_multilinestrings = pygeos.multilinestrings(street_linestrings)
+        street_multilinestrings = pygeos.make_valid(pygeos.multilinestrings(street_linestrings))
         street_multilinestrings = pygeos.intersection(street_multilinestrings, block)
 
         if pygeos.intersects(block, street_multilinestrings): 
@@ -297,7 +297,7 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
         if np.unique(pygeos.get_srid(street_linestrings))[0] == 4326:
             street_linestrings = transform_crs(geometry = street_linestrings, epsg_from = "EPSG:4326", epsg_to = "EPSG:3395")
         assert len(np.unique(pygeos.get_srid(street_linestrings))) == 1 and np.unique(pygeos.get_srid(street_linestrings))[0] == 3395, 'street_linestrings is not epsg:4326 or epsg:3395.'     
-        street_multilinestrings = pygeos.multilinestrings(street_linestrings)
+        street_multilinestrings = pygeos.make_valid(pygeos.multilinestrings(street_linestrings))
         street_multilinestrings = pygeos.intersection(street_multilinestrings, block)
 
 
