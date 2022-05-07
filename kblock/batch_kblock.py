@@ -11,6 +11,7 @@ from pandas._libs.lib import is_integer
 from pathlib import Path
 from urlpath import URL
 import psutil
+import gc
 import contextlib
 import warnings
 import logging
@@ -514,6 +515,8 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
             gadm_chunk = i[1]
             
             logging.info(f"Node status: {mem_profile_detail()}")
+            logging.info(f"Uncollectable garbage: {gc.garbage}")
+            logging.info(f"Garbage stats: {gc.get_stats()}")
             logging.info(f"Processing chunk: {gadm_chunk}")
     
             try:
