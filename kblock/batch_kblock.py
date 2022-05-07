@@ -541,7 +541,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
             
             # Parallelize block computation
             k_gadm = pd.DataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'block_area': pd.Series(dtype='float'), 'on_network_street_length': pd.Series(dtype='float'),  'off_network_street_length': pd.Series(dtype='float'), 'nearest_external_street': pd.Series(dtype='float'), 'building_area': pd.Series(dtype='float'), 'building_count': pd.Series(dtype='int'), 'building_layers': pd.Series(dtype='object'), 'k_complexity': pd.Series(dtype='int')})    
-            pool = multiprocessing.Pool(processes= number_of_cores) 
+            pool = multiprocessing.Pool(processes = number_of_cores, maxtasksperchild = 500) 
             output = pool.map(functools.partial(compute_k, block_col = 'block_id', block_data = blocks, bldg_data = buildings, street_linestrings = street_network, buffer_radius = 60, include_geometry = False), block_list)
             pool.close() 
             pool.join()
