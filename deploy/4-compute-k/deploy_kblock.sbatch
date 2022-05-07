@@ -4,7 +4,7 @@
 #SBATCH --partition=broadwl
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=15
+#SBATCH --cpus-per-task=21
 #SBATCH --mem=56000
 #SBATCH --output=/project2/bettencourt/mnp/production/jobs/job_::COUNTRYCODE::.out
 #SBATCH --error=/project2/bettencourt/mnp/production/jobs/job_::COUNTRYCODE::.err
@@ -19,7 +19,7 @@ country_chunk=(::COUNTRYCODE::)
 log_file_arg=/project2/bettencourt/mnp/production/jobs/log_::COUNTRYCODE::.log
 country_chunk_arg=${country_chunk[@]}
 chunk_size_arg=100000
-core_count_arg=14
+core_count_arg=20
 blocks_dir_arg=/project2/bettencourt/mnp/production/outputs/blocks
 streets_dir_arg=/project2/bettencourt/mnp/production/outputs/streets
 buildings_dir_arg=/project2/bettencourt/mnp/production/inputs/buildingpoints
