@@ -481,7 +481,6 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
                 country_buildings = country_buildings[~country_buildings['gadm_code'].isin(completed_gadm_list)]
                 #gadm_list = [x for x in gadm_list if x in set(country_buildings['gadm_code'].unique())] 
                 del completed_blocks
-        logging.info(f"GADMs to process: {gadm_list}")
 
         # Reconcile building and block GADM lists 
         building_gadm_list = country_buildings['gadm_code'].unique()
@@ -492,6 +491,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         intersected_list = [building_gadm_list, gadm_list] 
         gadm_list = list(set.intersection(*map(set,intersected_list)))
         # logging.info(f"GADM list intersected: {gadm_list}")
+        logging.info(f"GADMs to process: {gadm_list}")
         
         # Filter the GADMs in buildings file to list that intersects block file
         country_buildings = country_buildings[country_buildings['gadm_code'].isin(gadm_list)]
