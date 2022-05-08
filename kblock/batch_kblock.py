@@ -525,6 +525,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
             try:
                 street_zone = pygeos.buffer(pygeos.convex_hull(pygeos.union_all(pygeos.envelope(pygeos.from_shapely(blocks['geometry'])))), radius = 1000)
                 street_network = streets[pygeos.intersects(street_zone, streets)]
+                del street_zone
                 if len(street_network) == 0:
                     street_network = streets.copy()
             except Warning:
@@ -550,6 +551,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
             # Incremental file build
             k_gadm = dask.dataframe.from_pandas(data = k_gadm, npartitions = 1) 
             dask.dataframe.to_parquet(df = k_gadm, path = Path(dask_dir) / f'{country_code}.parquet', engine='pyarrow', compression='snappy', append=True, ignore_divisions=True)
+            del blocks, street_network, buildings, k_gadm, output 
 
             ## Parallelize layer computation
             #k_layers = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'block_property': pd.Series(dtype='str'), 'building_count': pd.Series(dtype='int'), 'k_complexity': pd.Series(dtype='int'), 'geometry': gpd.GeoSeries()})
