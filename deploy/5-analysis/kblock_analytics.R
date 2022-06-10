@@ -1,6 +1,5 @@
 
 
-
 library(ggplot2)
 library(sf)
 library(tidyverse)
@@ -13,24 +12,31 @@ library(units)
 library(ggsn)
 library(arrow)
 library(sfarrow)
+library(osmdata)
 
 # Paths --------------------------------------------------------------
+city_label = "Freetown"
+country_label = 'Sierra Leone'
 
-country_code = c('DJI','COG','ZAF','NGA')
-
+#city_label = "Cape Town"
+#country_label = 'South Africa'
+country_code = c('DJI','COG','SLE','ZAF','NGA')
+ghsl_delin = TRUE
 dir_path = '/Users/nm/Downloads/viz/'
-iso_code = country_code[1]
+iso_code = country_code[4]
+print(iso_code)
 
 blocks <-  st_read_parquet(paste0('/Users/nm/Downloads/production/outputs/blocks/blocks_',iso_code,'.parquet'))
-metrics <- read_parquet(paste0('/Users/nm/Downloads/production/outputs/kindex/kindex_',iso_code,'.parquet'))
+metrics <- read_parquet(paste0('/Users/nm/Downloads/production/outputs/kindex/complexity_',iso_code,'.parquet'))
 population <- read_parquet(paste0('/Users/nm/Downloads/production/outputs/population/population_',iso_code,'.parquet'))
-#streets <-  st_read('/Users/nm/Downloads/production/outputs/streets/streets_ZAF.parquet')
+# streets <-  st_read('/Users/nm/Downloads/production/outputs/streets/streets_',iso_code,'.parquet')
+if (ghsl_delin == TRUE) {
+  ghsl_xwalk <- read_parquet(paste0('/Users/nm/Downloads/production/outputs/ghsl/',iso_code,'_ghsl.parquet'))
+}
 
-st_write(blocks, '/Users/nm/Desktop/dji.geojson')
 # Checks
 sum(population$landscan_population)
 sum(population$worldpop_population)
-
 
 # GHSL City Data ----------------------------------------------------------
 
@@ -102,6 +108,7 @@ un_population <- un_population %>%
 
 # Load and prep data ------------------------------------------------------
 
+
 blocks <- blocks %>%
   left_join(., un_population %>% select(iso3_alpha_code, poptotal, popdensity), 
             by = c('country_code' = 'iso3_alpha_code'))
@@ -148,7 +155,6 @@ data_sum <- data %>% st_drop_geometry() %>%
          landscan_population_share = landscan_population/landscan_population_sum,
          worldpop_population_share = worldpop_population/worldpop_population_sum)
 
-
 # City Parameters ---------------------------------------------------------
 
 #city_list = c('Cape Town','Durban','Johannesburg') 
@@ -165,47 +171,35 @@ data_sum <- data %>% st_drop_geometry() %>%
 #   st_buffer(., 25000) %>% st_bbox(.) %>% st_as_sfc()
 #   #st_buffer(., 5280 * 1.5) %>% st_bbox(.) %>% st_as_sfc()
 
-target_area <- city_data %>% 
-  filter(country_iso %in% iso_code) %>%
-  filter(city_name == "Brazzaville") %>%
-  st_transform(4326) %>%
-  st_transform(3857) %>%
-  st_buffer(., 25000) %>% st_bbox(.) %>% st_as_sfc()
-
-blocks_centroids <- blocks %>% st_make_valid() %>% 
-  st_transform(3857) %>%
-  st_centroid()
-
-#yer_object$geometry <- yer_object$geometry %>%
-#  s2::s2_rebuild() %>%
-#  sf::st_as_sfc()
-
-zoom_zone <- blocks_centroids %>%
-  st_make_valid() %>%
-  st_transform(3857) %>%
-  mutate(in_zone = ifelse(sf::st_intersects(., target_area, sparse = F), "Yes", "No")) %>% 
-  filter(in_zone == 'Yes') %>%
-  st_intersection(., target_area)
-
-zoom_zone <- data %>% filter(block_id %in% unique(zoom_zone$block_id))
-
-#947
-#'ZAF.9.3.1.98_1_14'
-# theories
-# buffer out the linestrings, 
-# exteriors streets arent registered as streets
-# too many buildings
-# stranded and defaulting to buffer
-z <- data %>% filter(k_complexity >= 7) %>% st_drop_geometry() %>%
-  separate(col = building_layers, into = c('first','second','third'), sep = ',', remove = FALSE) %>%
-  mutate_at(c('first','second','third'), as.integer) %>%
-  filter(first <= 9)
-# write_csv(z, '/Users/nm/Desktop/qcblocks_ZAF.csv')
-# #12739/2416471
-# z <- zoom_zone %>% filter(str_sub(gadm_code, 1, 9) == 'ZAF.9.3.1') %>%
-#   filter(k_complexity)
-# st_write(zoom_zone %>% filter(k_complexity >= 15),'/Users/nm/Desktop/ct.geojson')
-
+if (ghsl_delin == FALSE) {
+  
+  target_area <- city_data %>% 
+    filter(country_iso %in% iso_code) %>%
+    filter(city_name == city_label) %>%
+    st_transform(4326) %>%
+    st_transform(3857) %>%
+    st_buffer(., 25000) %>% st_bbox(.) %>% st_as_sfc()
+  
+  blocks_centroids <- blocks %>% st_make_valid() %>% 
+    st_transform(3857) %>%
+    st_centroid()
+  
+  zoom_zone <- blocks_centroids %>%
+    st_make_valid() %>%
+    st_transform(3857) %>%
+    mutate(in_zone = ifelse(sf::st_intersects(., target_area, sparse = F), "Yes", "No")) %>% 
+    filter(in_zone == 'Yes') %>%
+    st_intersection(., target_area)
+  
+  zoom_zone <- data %>% filter(block_id %in% unique(zoom_zone$block_id))
+} else {
+  data <- data %>% 
+    left_join(., ghsl_xwalk %>% 
+                select(block_id, urban_center), by = c('block_id'='block_id')) %>% 
+    filter(urban_center %in% c(city_label))
+  target_area <- st_bbox(data %>% st_transform(4326))  %>% st_as_sfc()
+  zoom_zone <- data
+}
 
 zoom_zone <- zoom_zone %>% 
   mutate(k_complexity_groups = case_when(k_complexity >= 11 & k_complexity <= 15 ~ "11-15",
@@ -218,14 +212,18 @@ k_order = unique(zoom_zone$k_complexity_groups)
 zoom_zone <- zoom_zone %>% 
   mutate(k_complexity_groups = factor(k_complexity_groups,levels = k_order)) 
 
-st_bbox(zoom_zone %>% st_transform(3395))
-#zoom_zone_area = zoom_zone %>% select(geometry) %>% st_union() %>% st_transform(3857) %>% st_area()*1e-6 
-#units(zoom_zone_area) <- NULL
+if (ghsl_delin == FALSE) {
+  zoom_zone <- zoom_zone %>% st_intersection(., target_area %>% st_transform(4326))
+  #zoom_zone_area = zoom_zone %>% select(geometry) %>% st_union() %>% st_transform(3857) %>% st_area()*1e-6 
+  #units(zoom_zone_area) <- NULL
+}
+
+plot(zoom_zone %>% select(block_id))
 
 zoom_zone_sum <- zoom_zone %>% st_drop_geometry() %>%
   mutate(#k_complexity = as.factor(as.integer(k_complexity)),
-         k_complexity = k_complexity_groups,
-         block_hectares = na_if((block_area*0.0001), 0)) %>%
+    k_complexity = k_complexity_groups,
+    block_hectares = na_if((block_area*0.0001), 0)) %>%
   replace_na(list(block_hectares = 0)) %>%
   group_by(k_complexity) %>%
   summarize_at(vars(block_hectares, landscan_population, worldpop_population), list(sum), na.rm = TRUE) %>%
@@ -236,9 +234,58 @@ zoom_zone_sum <- zoom_zone %>% st_drop_geometry() %>%
   mutate(landscan_population_sum = sum(landscan_population),
          worldpop_population_sum = sum(worldpop_population),
          landscan_population_share = landscan_population/landscan_population_sum,
-         worldpop_population_share = worldpop_population/worldpop_population_sum) %>%
-  mutate()
-         
+         worldpop_population_share = worldpop_population/worldpop_population_sum) 
+
+# Water data --------------------------------------------------------------
+
+aoi_box <- target_area %>% st_transform(4326)
+
+# Download OSM water features 
+water <- opq(bbox = st_bbox(aoi_box), memsize = 1e+9) %>%
+  add_osm_feature(key = 'water') %>%
+  osmdata_sf() 
+
+# Download OSM waterway features
+waterway <- opq(bbox = st_bbox(aoi_box), memsize = 1e+9) %>%
+  add_osm_feature(key = 'waterway') %>%
+  osmdata_sf() 
+
+# Download OSM coastline features
+coastline <- opq(bbox = st_bbox(aoi_box), memsize = 1e+9) %>%
+  add_osm_feature(key = 'natural', value = 'coastline') %>%
+  osmdata_sf() %>% pluck("osm_lines") %>% rename(feature = natural) %>% 
+  dplyr::select(feature, geometry)
+
+# Download water features
+natural_water <- opq(bbox = st_bbox(aoi_box), memsize = 1e+9) %>%
+  add_osm_feature(key = 'natural',
+                  value = c('water')) %>%
+  osmdata_sf() 
+
+water_multipolygons <- water$osm_multipolygons %>% rename(feature = water) %>% dplyr::select(feature, geometry)
+water_polygons <- water$osm_polygons %>% rename(feature = water) %>% dplyr::select(feature, geometry)
+water_lines <- water$osm_lines %>% rename(feature = water) %>% dplyr::select(feature, geometry)
+
+waterway_multipolygons <- waterway$osm_multipolygons %>% rename(feature = waterway) %>% dplyr::select(feature, geometry)
+waterway_polygons <- waterway$osm_polygons  %>% rename(feature = waterway) %>% dplyr::select(feature, geometry)
+waterway_lines <- waterway$osm_lines %>% rename(feature = waterway) %>% dplyr::select(feature, geometry)
+waterway_multilines <- waterway$osm_multilines  %>% rename(feature = waterway) %>% dplyr::select(feature, geometry)
+
+natural_water_multipolygons <- natural_water$osm_multipolygons %>% rename(feature = natural)  %>% dplyr::select(feature, geometry)
+natural_water_polygons <- natural_water$osm_polygons %>% rename(feature = natural)  %>% dplyr::select(feature, geometry)
+
+# Parse and combine water linestrings and polygons
+water_poly <- rbind(get0('natural_water_multipolygons'),get0('natural_water_polygons'),
+                    get0("water_multipolygons"),get0("water_polygons"),
+                    get0("waterway_multipolygons"),get0("waterway_polygons")) %>%
+  st_intersection(.,st_as_sfc(st_bbox(aoi_box))) %>%
+  st_transform(4326) %>% dplyr::select(feature, geometry) %>%
+  filter(!is.na(feature))
+
+water_line <- rbind(get0('coastline'), get0("water_lines"), 
+                    get0("waterway_lines"), get0("waterway_multilines")) %>%
+  st_intersection(.,st_as_sfc(st_bbox(aoi_box))) %>%
+  st_transform(4326) %>% dplyr::select(feature, geometry)
 
 # Visualize zoom area -----------------------------------------------------
 
@@ -247,33 +294,46 @@ grey2 <- c('#414141','#777777')
 kdist = max(as.integer(zoom_zone$k_complexity_groups))
 colorhexes <- colorRampPalette(c('#93328E','#CF3F80','#F7626B','#FF925A','#FFC556','#F9F871'))(length(unique(zoom_zone$k_complexity_groups))-2)
 
+width = st_distance(st_sf(geom = st_sfc(st_point(c(st_bbox(zoom_zone)$xmin, st_bbox(zoom_zone)$ymin)),
+                                        st_point(c(st_bbox(zoom_zone)$xmax, st_bbox(zoom_zone)$ymin)), crs = 4326)))[2] %>%  drop_units()
+height = st_distance(st_sf(geom = st_sfc(st_point(c(st_bbox(zoom_zone)$xmin, st_bbox(zoom_zone)$ymin)),
+                                         st_point(c(st_bbox(zoom_zone)$xmin, st_bbox(zoom_zone)$ymax)), crs = 4326)))[2] %>%  drop_units()
+width_tenth = round((width*.2)/1000,-1)
+if (width_tenth < 1) {
+  width_tenth = round((width*.2)/1000,0)
+}
+height_decdegs = abs(unname(st_bbox(zoom_zone)$ymax) - unname(st_bbox(zoom_zone)$ymin))
+
 (plot_k_discrete <- ggplot() +
     geom_sf(data = zoom_zone, aes(fill = as.factor(k_complexity_groups)), color = road_color, size = .0075) +   
+    geom_sf(data = water_poly, fill = 'white', color = 'white', size = .1) +
+    geom_sf(data = water_line, fill = 'white', color = 'white', size = .1) +
     scale_fill_manual(values = c(grey2,colorhexes), name = 'k complexity') + 
-    labs(subtitle = '',
-         caption = paste0('Population weighted average k complexity in area: ',zoom_zone %>% st_drop_geometry() %>% summarise(wm_var = weighted.mean(as.integer(k_complexity), landscan_population)) %>% pull() %>% round(.,2))) +
-    theme_void() + theme(#plot.subtitle = element_text(size = 15, face="bold", vjust = -4, hjust=.5),
-                         plot.caption = element_text(size = 9, hjust = .5, vjust = 10,margin=margin(0,0,0,0)),
+    labs(caption = paste0('Population-weighted average k complexity: ',zoom_zone %>% st_drop_geometry() %>% summarise(wm_var = weighted.mean(as.integer(k_complexity), landscan_population)) %>% pull() %>% round(.,2))) +
+    guides(color = guide_legend(nrow = 1, label.position = "bottom", keywidth = 2, keyheight = 1),
+           fill =  guide_legend(nrow = 1, label.position = "bottom", keywidth = 2, keyheight = 1)) +
+    theme_void() + theme(plot.caption = element_text(size = 11, hjust = .5, vjust = 20, margin=margin(0,0,0,0)),
                          text = element_text(color = "#333333"),
-                         legend.position = c(1.1,.5),
-                         #legend.box.margin =unit(c(t=5,r=40,b=5,l=10), "pt"),
-                         legend.key.height= unit(13, 'pt'),
-                         legend.key.width= unit(13, 'pt'),
-                         #axis.title.x = element_blank(),
-                         legend.text = element_text(size = 8),
+                         #legend.position = c(1.05,.7),
+                         legend.position = 'bottom',
+                         legend.spacing.x = unit(1, 'pt'),
+                         #legend.key.height = unit(10, 'pt'), 
+                         #legend.key.width = unit(10, 'pt'),
+                         legend.text = element_text(size = 10),
                          panel.border = element_blank(),
                          panel.background = element_blank(),
-                         plot.margin=unit(c(t=0,r=40,b=0,l=0), "pt"),
-                         legend.title = element_text( face="bold", size = 10),
+                         plot.margin=unit(c(t=0,r=10,b=0,l=0), "pt"),
+                         legend.title = element_blank(),
                          axis.text = element_blank()) +
-    ggsn::scalebar(y.min = st_bbox(zoom_zone)$ymin - .003,x.min = st_bbox(zoom_zone)$xmin, 
-                   y.max = st_bbox(zoom_zone)$ymax, x.max = st_bbox(zoom_zone)$xmax, location = 'bottomleft',
+    ggsn::scalebar(y.min = st_bbox(zoom_zone)$ymin - (height_decdegs*.03), 
+                   x.min = st_bbox(zoom_zone)$xmin, 
+                   y.max = st_bbox(zoom_zone)$ymax, 
+                   x.max = st_bbox(zoom_zone)$xmax, 
+                   location = 'bottomleft',
                    height = .01, box.fill = c('#333333','#ffffff'),
                    border.size = .4, st.color = '#333333', st.size = 2.5, box.color = '#333333',
-                   dist = 1, dist_unit = "km", transform = TRUE, model = "WGS84")
+                   dist = width_tenth/2, dist_unit = "km", transform = TRUE, model = "WGS84") 
   )
-
-#scale_cut = c(0, k = 1e3, m = 1e6, bn = 1e9, tn = 1e12)
 
 
 (bar_k_distrib <- ggplot(zoom_zone_sum) +
@@ -291,7 +351,7 @@ colorhexes <- colorRampPalette(c('#93328E','#CF3F80','#F7626B','#FF925A','#FFC55
     labs(y = 'Population', x = 'k complexity', subtitle = '') + #'Population distribution across k-complexity levels'
     theme(text = element_text(color = "#333333"),
           legend.position= "none",
-          #plot.margin = unit(c(1,1,1,1),"cm"),
+          plot.margin=unit(c(t=0,r=5,b=0,l=5), "pt"),
           axis.ticks =element_blank(),
           axis.text = element_text(size = 11),
           axis.text.x = element_text(size = 9),
@@ -300,80 +360,136 @@ colorhexes <- colorRampPalette(c('#93328E','#CF3F80','#F7626B','#FF925A','#FFC55
           axis.title = element_text(face="bold", size = 11),
           plot.subtitle = element_text(size = 15, face="bold", hjust=.5)))
 
+
 (plot_populaton <- ggplot() +
     geom_sf(data = zoom_zone,
             aes(fill = landscan_population_log ), 
             color = 'white', size= .0075, alpha = .8) +
-    labs(subtitle = '',
-         caption = paste0('Total population in area: ',comma(sum(zoom_zone$landscan_population)),'  |  ',
+    geom_sf(data = water_poly, fill = 'white', color = 'white', size = .1) +
+    geom_sf(data = water_line, fill = 'white', color = 'white', size = .1) +
+    labs(subtitle = "Population",
+           caption = paste0('Total population in area: ',comma(sum(zoom_zone$landscan_population)),'  |  ',
          'Average block population: ',comma(round(mean(zoom_zone$landscan_population),2)))) + 
-    scale_fill_viridis(name = 'Population', oob = scales::squish, limits= c(1, max(zoom_zone$landscan_population_log )), breaks= c(1,2,3,4,5,6,7), labels = c('0',"100","1K","10K","100K","1M","10M")) + 
-    scale_color_viridis(name = 'Population', oob = scales::squish, limits= c(1, max(zoom_zone$landscan_population_log )), breaks= c(1,2,3,4,5,6,7), labels = c('0',"100","1K","10K","100K","1M","10M")) +
+    # scale_fill_viridis(name = 'Population', oob = scales::squish, limits= c(1, max(zoom_zone$landscan_population_log )), breaks= c(1,2,3,4,5,6,7), labels = c('0',"100","1K","10K","100K","1M","10M")) + 
+    # scale_color_viridis(name = 'Population', oob = scales::squish, limits= c(1, max(zoom_zone$landscan_population_log )), breaks= c(1,2,3,4,5,6,7), labels = c('0',"100","1K","10K","100K","1M","10M")) +
+    scale_fill_distiller(palette = 'Spectral', name = 'Population', oob = scales::squish, limits= c(1, max(zoom_zone$landscan_population_log )), breaks= c(1,2,3,4,5,6,7), labels = c('0',"100","1K","10K","100K","1M","10M")) + 
+    scale_color_distiller(palette = 'Spectral', oob = scales::squish, limits= c(1, max(zoom_zone$landscan_population_log )), breaks= c(1,2,3,4,5,6,7), labels = c('0',"100","1K","10K","100K","1M","10M")) +
     theme_void() + 
-    theme(plot.subtitle = element_text(size = 14, face="bold", vjust = -4, hjust=.5),axis.text = element_blank(),
-          plot.caption = element_text(size = 9, hjust = .5, vjust = 7),
-          legend.position = c(1.07,.8),
-          plot.margin=unit(c(t=0,r=50,b=0,l=5), "pt"),
-          legend.title = element_text( face="bold"),
+    #guides(color = guide_legend(title.position="top", title.hjust = 0.5),
+    #       fill = guide_legend(title.position="top", title.hjust = 0.5)) +
+    theme(#plot.subtitle = element_text(size = 14, face="bold", vjust = -4, hjust=.5),axis.text = element_blank(),
+          plot.caption = element_text(size = 10, hjust = .5, vjust = 5),
+          #legend.position = c(1.05,.7),
+          #legend.position = 'bottom',
+          #legend.position = 'top',
+          #legend.position = c(.5, .01),
+          legend.position = c(.5, 1),
+          legend.direction = "horizontal",
+          legend.key.width=unit(40,"pt"),
+          legend.key.height=unit(5,"pt"),
+          plot.margin = unit(c(t=15,r=0,b=0,l=0), "pt"),
+          plot.subtitle = element_text(size = 11, face="bold", vjust = 5, hjust = .5),
+          legend.title = element_blank(),
+          #legend.title = element_text(face="bold", hjust = .5),
           text = element_text(color = "#333333")) +
-    ggsn::scalebar(y.min = st_bbox(zoom_zone)$ymin - .003,x.min = st_bbox(zoom_zone)$xmin, 
-                   y.max = st_bbox(zoom_zone)$ymax, x.max = st_bbox(zoom_zone)$xmax, location = 'bottomleft',
+    ggsn::scalebar(y.min = st_bbox(zoom_zone)$ymin - (height_decdegs*.04), 
+                   x.min = st_bbox(zoom_zone)$xmin, y.max = st_bbox(zoom_zone)$ymax, x.max = st_bbox(zoom_zone)$xmax, 
+                   location = 'bottomleft',
                    height = .01, box.fill = c('#333333','#ffffff'),
                    border.size = .4, st.color = '#333333', st.size = 2.5, box.color = '#333333',
-                   dist = 1, dist_unit = "km", transform = TRUE, model = "WGS84"))
+                   dist = width_tenth/2, dist_unit = "km", transform = TRUE, model = "WGS84") )
   
-sd_int = log10(mean(zoom_zone$landscan_pop_density_hectare) + sd(zoom_zone$landscan_pop_density_hectare)*1)
+
+sd_int = log10(mean(zoom_zone$landscan_pop_density_hectare, na.rm = TRUE) + sd(zoom_zone$landscan_pop_density_hectare, na.rm = TRUE)*1)
 (plot_popdensity_log <- ggplot() +
     geom_sf(data = zoom_zone,
             aes(fill = landscan_pop_density_hectare_log), 
             color = 'white', size= .0075, alpha = .8) +
-    labs(subtitle = '',
+    geom_sf(data = water_poly, fill = 'white', color = 'white', size = .1) +
+    geom_sf(data = water_line, fill = 'white', color = 'white', size = .1) +
+    labs(subtitle = "Population per hectare",
          caption = paste0('Weighted average population density: ',
                           zoom_zone %>% st_drop_geometry() %>% summarize(pop_dense = weighted.mean(landscan_pop_density_hectare, landscan_population) ) %>% pull() %>% round(.,0),
-                          ' people per hectare','\n  1 hectare = 1.4 soccer fields = 2.2 city blocks in Manhattan, New York City')) +
-    scale_fill_viridis(name = 'Population\nper hectare', oob = scales::squish, limits= c(1, sd_int), 
+                          ' people per hectare','\n 1 hectare = 10k m^2 = 1.4 soccer fields = 2.2 Manhattan city blocks')) +
+    # scale_fill_viridis(name = 'Population\nper hectare', oob = scales::squish, limits= c(1, 3), 
+    #                    breaks= c(1,2,3,4,5,6,7), 
+    #                    labels = c('0',"100","1K","10K","100K","1M","10M")) +
+    # scale_color_viridis(name = 'Population\nper hectare', oob = scales::squish, limits= c(1, 3), 
+    #                     breaks= c(1,2,3,4,5,6,7), 
+    #                     labels = c('0',"100","1K","10K","100K","1M","10M")) +
+    scale_fill_distiller(direction = -1, palette = 'Spectral', name = 'Population\nper hectare', oob = scales::squish, limits= c(1, 3), 
                        breaks= c(1,2,3,4,5,6,7), 
                        labels = c('0',"100","1K","10K","100K","1M","10M")) +
-                       #breaks= c(1,1.477121,2,2.477121,3,3.69897,4,5,6,7), 
-                       #labels = c('0','30',"100",'300',"1K","5K","10K","100K","1M","10M")) +
-    scale_color_viridis(name = 'Population\nper hectare', oob = scales::squish, limits= c(1, sd_int), 
+    scale_color_distiller(direction = -1, palette = 'Spectral', name = 'Population\nper hectare', oob = scales::squish, limits= c(1, 3), 
                         breaks= c(1,2,3,4,5,6,7), 
                         labels = c('0',"100","1K","10K","100K","1M","10M")) +
-                        #breaks= c(1,1.477121,2,2.477121,3,3.69897,4,5,6,7), 
-                        #labels = c('0','30',"100",'300',"1K","5K","10K","100K","1M","10M")) +
     theme_void() + 
-    theme(plot.subtitle = element_text(size = 14, face="bold", vjust = -4, hjust=.5),
-          plot.caption = element_text(size = 9, hjust = .5, vjust = 7),
-          legend.position = c(1.07,.8),
-          plot.margin=unit(c(t=0,r=70,b=0,l=5), "pt"),
-          axis.text = element_blank(),
-          legend.title = element_text( face="bold"),
+    theme(#plot.subtitle = element_text(size = 14, face="bold", vjust = -4, hjust=.5),
+          #plot.caption = element_text(size = 10, hjust = .5, vjust = 25),
+          plot.caption = element_text(size = 10, hjust = .5, vjust = 5),
+          #legend.position = c(1.05,.7),
+          #legend.position = 'top',
+          legend.position = c(.5, 1),
+          legend.direction = "horizontal",
+          #legend.position = c(.5, .01),
+          legend.key.width=unit(40,"pt"),
+          legend.key.height=unit(5,"pt"),
+          plot.margin=unit(c(t=15,r=0,b=0,l=0), "pt"),
+          #axis.text = element_blank(),
+          plot.subtitle = element_text(size = 11, face="bold", vjust = 5, hjust = .5),
+          legend.title = element_blank(),
+          #legend.title = element_text(face="bold", hjust = .5),
           text = element_text(color = "#333333")) +
-    ggsn::scalebar(y.min = st_bbox(zoom_zone)$ymin - .003,x.min = st_bbox(zoom_zone)$xmin, 
-                   y.max = st_bbox(zoom_zone)$ymax, x.max = st_bbox(zoom_zone)$xmax, location = 'bottomleft',
+    ggsn::scalebar(y.min = st_bbox(zoom_zone)$ymin - (height_decdegs*.04), 
+                   x.min = st_bbox(zoom_zone)$xmin, y.max = st_bbox(zoom_zone)$ymax, x.max = st_bbox(zoom_zone)$xmax, 
+                   location = 'bottomleft',
                    height = .01, box.fill = c('#333333','#ffffff'),
                    border.size = .4, st.color = '#333333', st.size = 2.5, box.color = '#333333',
-                   dist = 1, dist_unit = "km", transform = TRUE, model = "WGS84"))
+                   dist = width_tenth/2, dist_unit = "km", transform = TRUE, model = "WGS84") )
 
-st_bbox(zoom_zone)$ymin
-st_bbox(zoom_zone)$xmin
+if (ghsl_delin == TRUE) {
+  full_city = '_city'
+} else {
+  full_city = ''
+}
 
-(plot_k <- plot_k_discrete + bar_k_distrib +
-    plot_layout(widths = c(1, 1))  +
+
+(plot_k <- plot_k_discrete + bar_k_distrib +#+ plot_spacer() 
+    plot_layout(widths = c(1,.8))  + # , height = c(1.5, 1) .01 ,
    plot_annotation(#title = paste0(city_name,', ', country_name),
-                   subtitle = paste0(city_name,', ', country_name),
+                   subtitle = paste0(city_label,', ', country_label),
                    theme = theme(#plot.title = element_text(face="bold", size = 18, vjust = -2, hjust = .5),
                                  plot.subtitle = element_text(face="bold", size = 13, vjust = -7, hjust = .5))))
-ggsave(plot = plot_k, filename = paste0(dir_path,city_name,'_k.pdf'), dpi = 600, height = 6, width = 12)
+ggsave(plot = plot_k, filename = paste0(dir_path,city_label,'_k',full_city,'.pdf'), height = (12*(height/width))/2+1.5, width = 12)
+ggsave(plot = plot_k, filename = paste0(dir_path,city_label,'_k',full_city,'.png'), dpi = 300, height = (12*(height/width))/2+1.5, width = 12)
 
 (plot_pop <- plot_populaton + plot_popdensity_log +
     plot_layout(widths = c(1, 1)) +
   plot_annotation(#title = paste0(city_name,', ', country_name ),
-                  subtitle = paste0(city_name,', ', country_name ),
+                  subtitle = paste0(city_label,', ', country_label),
                   theme = theme(#plot.title = element_text(face="bold", size = 18, vjust = -2, hjust = .5),
                                 plot.subtitle = element_text(face="bold", size = 13, vjust = -5, hjust = .5)))
   )
-ggsave(plot = plot_pop, filename = paste0(dir_path,city_name,'_pop.pdf'), dpi = 600, height = 7, width = 12)
+ggsave(plot = plot_pop, filename = paste0(dir_path,city_label,'_pop',full_city,'.pdf'), height = (12*(height/width))/2+1.5, width = 12)
+ggsave(plot = plot_pop, filename = paste0(dir_path,city_label,'_pop',full_city,'.png'), dpi = 300, height = (12*(height/width))/2+1.5, width = 12)
+
+
+# Country -----------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # Visualize country -------------------------------------------------------
@@ -466,7 +582,7 @@ plot_popdensity_log <- ggplot() +
     labs(subtitle = '',
          caption = paste0('Weighted average population density: ',
                           data %>% st_drop_geometry() %>% summarize(pop_dense = weighted.mean(landscan_pop_density_hectare, landscan_population) ) %>% pull() %>% round(.,0),
-                          ' people per hectare','\n  1 hectare = 1.4 soccer fields = 2.2 city blocks in Manhattan, New York City')) +
+                          ' people per hectare','\n  1 hectare = 10k m^2 = 1.4 soccer fields = 2.2 Manhattan city blocks')) +
     scale_fill_viridis(name = 'Population\nper hectare', oob = scales::squish, limits= c(1, sd3), breaks= c(1,1.477121,2,2.60206,3,3.69897,4,5,6,7), labels = c('0','30',"100",'400',"1K","5K","10K","100K","1M","10M")) +
     scale_color_viridis(name = 'Population\nper hectare', oob = scales::squish, limits= c(1, sd3), breaks= c(1,1.477121,2,2.60206,3,3.69897,4,5,6,7), labels = c('0','30',"100",'400',"1K","5K","10K","100K","1M","10M")) +
     theme_void() + 
@@ -511,12 +627,3 @@ data_sum %>% select(k_complexity, landscan_population) %>% print(n = 100)
 #   add_osm_feature(key = 'buildings') %>%
 #   osmdata_sf() 
 # bldgs_polygons <- bldgs$osm_polygons %>% dplyr::select(osm_id)
-
-
-
-
-
-
-
-
-
