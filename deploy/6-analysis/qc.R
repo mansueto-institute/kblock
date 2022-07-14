@@ -282,3 +282,87 @@ explore_acs_vars()
 
 
 
+
+
+library(osmdata)
+
+aoi_box <- target_area %>% st_transform(4326)
+
+# Download OSM water features 
+water <- opq(bbox = st_bbox(aoi_box), memsize = 1e+9) %>%
+  add_osm_feature(key = 'water') %>%
+  osmdata_sf() 
+water_mulitpolygons <- water$osm_multipolygons %>% dplyr::select(osm_id)
+water_polygons <- water$osm_polygons %>% dplyr::select(osm_id)
+water_lines <- water$osm_lines %>% dplyr::select(osm_id)
+
+# Download OSM waterway features
+waterway <- opq(bbox = st_bbox(aoi_box), memsize = 1e+9) %>%
+  add_osm_feature(key = 'waterway') %>%
+  osmdata_sf() 
+waterway_mulitpolygons <- waterway$osm_multipolygons %>% dplyr::select(osm_id)
+waterway_polygons <- waterway$osm_polygons %>% dplyr::select(osm_id)
+waterway_lines <- waterway$osm_lines %>% dplyr::select(osm_id)
+waterway_multilines <- waterway$osm_multilines %>% dplyr::select(osm_id)
+
+# Download OSM coastline features
+coastline <- opq(bbox = st_bbox(aoi_box), memsize = 1e+9) %>%
+  add_osm_feature(key = 'natural', value = 'coastline') %>%
+  osmdata_sf() %>%
+  pluck("osm_lines") 
+
+# Parse and combine water linestrings and polygons
+water_poly <- rbind(water_mulitpolygons,water_polygons,waterway_mulitpolygons,waterway_polygons) %>%
+  st_intersection(.,st_as_sfc(st_bbox(aoi_box))) %>%
+  st_transform(4326) %>% dplyr::select(geometry) 
+water_line <- rbind(coastline, water_lines,waterway_lines,waterway_multilines) %>%
+  st_intersection(.,st_as_sfc(st_bbox(aoi_box))) %>%
+  st_transform(4326) %>% dplyr::select(geometry)
+
+# Create natural barrier polygons -----------------------------------------
+
+# Build bounding polygon
+print('Build bounding polygon')
+crop_box = st_bbox(aoi_box) %>% st_as_sfc()
+crop_box = (crop_box - st_centroid(crop_box)) * 0.999 + st_centroid(crop_box)
+crop_box <- crop_box %>% st_set_crs(4326)
+
+# Clean up OSM water features
+print('Clean up OSM water features')
+water_barriers = rbind(water_poly %>% st_as_sf() ) %>% 
+  st_union() %>% st_as_sf() %>% 
+  sf::st_crop(x = . , y = crop_box) %>%
+  st_transform(3857) %>%
+  st_collection_extract(. , type = c( "POLYGON")) %>%
+  st_cast("POLYGON") %>%
+  mutate(area_w = st_area(x)) %>%
+  filter(area_w >= units::set_units(1e+07,m^2)) %>%
+  smooth(., method = "chaikin") %>%
+  st_make_valid()
+plot(water_barriers)
+
+# Polygons of water features (no oceans)
+print('Polygons of water features (no oceans)')
+water_boundaries_poly <- water_barriers %>% st_transform(3857) %>%
+  st_buffer(x = ., dist = units::set_units(300,m)) %>%
+  smooth(., method = "chaikin") %>%
+  st_buffer(x = ., dist = units::set_units(1000,m)) %>%
+  st_simplify(x = ., preserveTopology = TRUE, dTolerance = units::set_units(500,m)) %>%
+  st_make_valid()
+plot(water_boundaries_poly)
+
+# Linestrings of water features
+print('Linestrings of water features')
+water_boundaries <- water_boundaries_poly %>%
+  st_boundary() %>%
+  st_collection_extract(. , type = c( "LINESTRING")) %>%
+  st_cast(., "LINESTRING") %>%
+  rename(geometry = x) %>%
+  dplyr::select(geometry)
+plot(water_boundaries)
+
+ggplot() +
+  geom_sf(data = water_boundaries_poly, color = 'blue') +
+  geom_sf(data = water_barriers, color = 'green') 
+
+
