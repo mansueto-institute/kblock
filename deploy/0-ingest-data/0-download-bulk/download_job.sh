@@ -17,8 +17,11 @@ while getopts ":o:" opt; do
 done
 
 cwd=$(pwd)
+
 mkdir -p $outpath
 mkdir -p $outpath/osm/pbf
+mkdir -p $outpath/osm/polygons
+mkdir -p $outpath/osm/linestrings
 mkdir -p $outpath/gadm/shp
 
 geofabrik_list=(angola burundi benin burkina-faso botswana central-african-republic ivory-coast cameroon congo-democratic-republic congo-brazzaville comores cape-verde djibouti eritrea morocco ethiopia gabon ghana guinea senegal-and-gambia guinea-bissau equatorial-guinea kenya liberia lesotho madagascar mali mozambique mauritania mauritius malawi namibia niger nigeria rwanda sudan senegal-and-gambia sierra-leone somalia south-sudan sao-tome-and-principe swaziland seychelles chad togo tanzania uganda south-africa zambia zimbabwe)
@@ -41,7 +44,8 @@ echo "${residual_osm_list[@]}"
 for country in ${residual_osm_list[@]}; do
 echo "$country"
     wget -O $outpath/osm/pbf/${country}-latest.osm.pbf https://download.geofabrik.de/africa/${country}-latest.osm.pbf
-    osmium export $outpath/osm/pbf/${country}-latest.osm.pbf -o $outpath/osm/${country}-latest-linestring.geojson -c $cwd/export-config.json --overwrite --geometry-types=linestring
+    osmium export $outpath/osm/pbf/${country}-latest.osm.pbf -o $outpath/osm/linestrings/${country}-latest-linestring.geojson -c $cwd/export-config.json --overwrite --geometry-types=linestring
+    osmium export $outpath/osm/pbf/${country}-latest.osm.pbf -o $outpath/osm/polygons/${country}-latest-polygon.geojson -c $cwd/water-config.json --overwrite --geometry-types=polygon
 done
 
 # Create array of countries that haven't been downloaded from https://gadm.org/
