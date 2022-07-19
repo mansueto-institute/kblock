@@ -1,7 +1,7 @@
 # kblock
 Python tools for building and measuring street blocks using geographic data
 
-```
+
 #### Python environment setup (requires miniconda at https://docs.conda.io/en/latest/miniconda.html)
 ```
 conda create --name geospatial python=3.9.7 --yes
