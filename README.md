@@ -20,4 +20,5 @@ conda install -c conda-forge rasterio --yes
 conda install -c conda-forge xarray --yes
 conda install -c conda-forge rioxarray --yes
 conda install -c conda-forge momepy --yes
+conda install -c conda-forge pyogrio --yes
 ```
