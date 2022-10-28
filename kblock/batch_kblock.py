@@ -34,22 +34,42 @@ from shapely.errors import ShapelyDeprecationWarning
 warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*')
 warnings.filterwarnings("ignore", category=ShapelyDeprecationWarning)
 
-def index_buildings(gadm_block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def transform_crs(geometry: pygeos.Geometry, epsg_from = "EPSG:4326", epsg_to = "EPSG:3395") -> pygeos.Geometry:
+    """
+    Transform PyGEOS Geometry from one coordinate 
+    reference system to another
+    Args:
+        geometry: PyGEOS Geometry array
+        epsg_from: string, anything accepted by pyproj.CRS.from_user_input(), (i.e., "EPSG:4326")
+        epsg_to: string, anything accepted by pyproj.CRS.from_user_input(), (i.e., "EPSG:4326")
+    Returns:
+        PyGEOS Geometry array
+    """
+    transformer = pyproj.Transformer.from_crs(crs_from = epsg_from, crs_to = epsg_to, always_xy=True)
+    coords = pygeos.get_coordinates(geometry)
+    new_coords = transformer.transform(coords[:, 0], coords[:, 1])
+    data = pygeos.set_coordinates(geometry.copy(), np.array(new_coords).T)
+    return data
+
+def index_buildings(block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Joins GeoDataFrame of enclosed block geometries to a GeoDataFrame containing building footprints, for footprints that 
     overlap multiple with block geometries this function allocates the footprint to the block containing its centroid.
     Args:
-        gadm_block_data: GeoDataFrame output returned from build_blocks() function, requires CRS WGS 84 EPSG 4326 or 3395
+        block_data: GeoDataFrame output returned from build_blocks() function, requires CRS WGS 84 EPSG 4326 or 3395
         bldg_data: GeoDataFrame containing building geometries, requires CRS WGS 84 EPSG 4326 or 3395 (accepts 'Polygon' or 'Point' geometries)
     Returns:
         GeoDataFrame with building geometries mapped to 'block_id','gadm_code','country_code'.
         Geometry projected in CRS WGS 84 EPSG 4326. 
     """
-    assert gadm_block_data.crs in ['epsg:3395','epsg:4326'], "gadm_block_data is not epsg:4326 or epsg:3395."
+    assert block_data.crs in ['epsg:3395','epsg:4326'], "block_data is not epsg:4326 or epsg:3395."
     assert bldg_data.crs in ['epsg:3395','epsg:4326'], "bldg_data is not epsg:4326 or epsg:3395."
 
-    if gadm_block_data.crs == 'epsg:4326': gadm_block_data = gadm_block_data.to_crs(epsg=3395)
+    if block_data.crs == 'epsg:4326': block_data = block_data.to_crs(epsg=3395)
     if bldg_data.crs == 'epsg:4326': bldg_data = bldg_data.to_crs(epsg=3395)
+
+    block_data = block_data.reset_index(drop=True)
+    bldg_data = bldg_data.reset_index(drop=True)
 
     gtypes = bldg_data['geometry'].geom_type.unique()
     if len(gtypes) > 1 or gtypes[0] != 'Point':
@@ -60,30 +80,33 @@ def index_buildings(gadm_block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFra
 
     bldg_index = bldg_points.sindex
 
-    index_bulk = bldg_index.query_bulk(gadm_block_data['geometry'], predicate="intersects")  ##
+    index_bulk = bldg_index.query_bulk(block_data['geometry'], predicate="intersects")  ##
     blocks_buildings_map = pd.DataFrame({'index_blocks': index_bulk[0], 'index_buildings': index_bulk[1]})
     blocks_buildings_map = blocks_buildings_map.merge(bldg_data[['geometry']], how = 'left', left_on='index_buildings', right_index=True)
-    blocks_buildings_map = blocks_buildings_map.merge(gadm_block_data[['block_id','gadm_code','country_code']], left_on='index_blocks', right_index=True)
+    blocks_buildings_map = blocks_buildings_map.merge(block_data[['block_id','gadm_code','country_code']], left_on='index_blocks', right_index=True)
 
     data = gpd.GeoDataFrame(blocks_buildings_map[['block_id','gadm_code','country_code','geometry']]).set_crs(epsg=3395)
     data = data.to_crs(epsg=4326)
     return data
 
-def index_building_points(gadm_block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def index_building_points(block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Joins GeoDataFrame of enclosed block geometries to a GeoDataFrame containing building footprint centroids
     Args:
-        gadm_block_data: GeoDataFrame output returned from build_blocks() function, requires CRS WGS 84 EPSG 4326 or 3395
+        block_data: GeoDataFrame output returned from build_blocks() function, requires CRS WGS 84 EPSG 4326 or 3395
         bldg_data: GeoDataFrame containing building point geometries with building_area column, requires CRS WGS 84 EPSG 4326 or 3395 (accepts 'Polygon' or 'Point' geometries)
     Returns:
         GeoDataFrame with building geometries mapped to 'building_id','building_area','block_id','gadm_code','country_code'.
         Geometry projected in CRS WGS 84 EPSG 4326. 
     """
-    assert gadm_block_data.crs in ['epsg:3395','epsg:4326'], "gadm_block_data is not epsg:4326 or epsg:3395."
+    assert block_data.crs in ['epsg:3395','epsg:4326'], "block_data is not epsg:4326 or epsg:3395."
     assert bldg_data.crs in ['epsg:3395','epsg:4326'], "bldg_data is not epsg:4326 or epsg:3395."
 
-    if gadm_block_data.crs == 'epsg:4326': gadm_block_data = gadm_block_data.to_crs(epsg=3395)
+    if block_data.crs == 'epsg:4326': block_data = block_data.to_crs(epsg=3395)
     if bldg_data.crs == 'epsg:4326': bldg_data = bldg_data.to_crs(epsg=3395)
+
+    block_data = block_data.reset_index(drop=True)
+    bldg_data = bldg_data.reset_index(drop=True)
 
     gtypes = bldg_data['geometry'].geom_type.unique()
     if len(gtypes) > 1 or gtypes[0] != 'Point':
@@ -94,10 +117,10 @@ def index_building_points(gadm_block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoD
 
     bldg_index = bldg_points.sindex
 
-    index_bulk = bldg_index.query_bulk(gadm_block_data['geometry'], predicate="intersects")  ##
+    index_bulk = bldg_index.query_bulk(block_data['geometry'], predicate="intersects")  ##
     blocks_buildings_map = pd.DataFrame({'index_blocks': index_bulk[0], 'index_buildings': index_bulk[1]})
     blocks_buildings_map = blocks_buildings_map.merge(bldg_data[['building_id','building_area','geometry']], how = 'left', left_on='index_buildings', right_index=True)
-    blocks_buildings_map = blocks_buildings_map.merge(gadm_block_data[['block_id','gadm_code','country_code']], left_on='index_blocks', right_index=True)
+    blocks_buildings_map = blocks_buildings_map.merge(block_data[['block_id','gadm_code','country_code']], left_on='index_blocks', right_index=True)
 
     data = gpd.GeoDataFrame(blocks_buildings_map[['building_id','building_area','block_id','gadm_code','country_code','geometry']]).set_crs(epsg=3395)
     data = data.to_crs(epsg=4326)
@@ -247,7 +270,7 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
     return data
 
 
-def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame, street_linestrings: Union[pygeos.Geometry, gpd.GeoDataFrame] = None, buffer_radius: float = 100) -> gpd.GeoDataFrame:
+def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame, street_linestrings: Union[pygeos.Geometry, gpd.GeoDataFrame] = None, use_building_polygons: bool = True, buffer_radius: float = 100, shrink_value: float = 0.1, segment_value: float = 0.5, threshold_value: float = 0.01) -> gpd.GeoDataFrame:
     """
     Computes the k-complexity value for each layer of buildings within a block taking a GeoDataFrame of enclosed blocks, 
     the indexed building GeoDataFrame, and street linestrings in the form of a PyGEOS Geometry (or GeoDataFrame with slower performance). 
@@ -258,7 +281,9 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
         block_data: GeoDataFrame, output returned from build_blocks() function, requires CRS 4326 or 3395 for faster performance
         bldg_data: GeoDataFrame, output returned from index_buildings() function, requires CRS 4326 or 3395 for faster performance
         street_linestrings: GeoDataFrame or PyGEOS Geometry array (optional), linestrings representing street accesses, requires CRS 4326 or 3395
+        use_building_polygons: bool (optional), contour parcels around input polygon bldg_data, otherwise defaults to points
         buffer_radius: float (optional), extends disconnected street_linestrings to street network that are within a set tolerance in meters
+        For info about shrink_value, segment_value, threshold_value see: http://docs.momepy.org/en/stable/generated/momepy.Tessellation.html
     Returns:
         GeoDataFrame with block-layer geometries and the columns: 'block_id', 'gadm_code', 'country_code', 'block_property', 'building_count', 'k_complexity', 'geometry'
         Geometry projected in CRS 4326.        
@@ -285,13 +310,19 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
     off_network_length = 0 
     on_network_length = 0 
 
-    if bldg_count > 0:
-        gtypes = bldg_data['geometry'].geom_type.unique()
-        if len(gtypes) > 1 or gtypes[0] != 'Point':
-            bldg_data["geometry"] = bldg_data.centroid
-        building_points = pygeos.multipoints(pygeos.from_shapely(bldg_data["geometry"]))
-    else: 
-        building_points = pygeos.centroid(pygeos.union_all(block))
+    if use_building_polygons == False:
+        if bldg_count > 0:
+            gtypes = bldg_data['geometry'].geom_type.unique()
+            if len(gtypes) > 1 or gtypes[0] != 'Point':
+                bldg_data["geometry"] = bldg_data.centroid
+            building_points = pygeos.multipoints(pygeos.from_shapely(bldg_data["geometry"]))
+        else: 
+            building_points = pygeos.centroid(pygeos.union_all(block))
+    else:
+        if bldg_count > 0:
+            building_polygons = bldg_data.copy()
+        else: 
+            building_polygons = pygeos.centroid(pygeos.union_all(block))
 
     if street_linestrings is not None:
         if type(street_linestrings) == gpd.geodataframe.GeoDataFrame:    
@@ -322,7 +353,14 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
                 is_connected = True
     
     if bldg_count not in [1,0]:
-        voronoi = pygeos.get_parts(pygeos.voronoi_polygons(geometry=building_points, extend_to=block))
+
+        if use_building_polygons == True:
+            building_polygons['bldg_id'] = momepy.unique_id(building_polygons)
+            enclosed_tess = momepy.Tessellation(gdf=building_polygons, unique_id='bldg_id', enclosures=block_data, enclosure_id='block_id', shrink = shrink_value, segment = segment_value, threshold = threshold_value).tessellation
+            voronoi = pygeos.get_parts(pygeos.from_shapely(enclosed_tess['geometry']))
+        else:
+            voronoi = pygeos.get_parts(pygeos.voronoi_polygons(geometry=building_points, extend_to=block))
+
         if not pygeos.is_valid(block): block = pygeos.make_valid(block)
         block_parcels = pygeos.intersection(block, voronoi)    
         bldg_count = np.sum(pygeos.get_num_geometries(block_parcels))
