@@ -29,6 +29,7 @@ import pyarrow
 import multiprocessing
 import dask 
 import dask_geopandas
+import momepy
 
 from shapely.errors import ShapelyDeprecationWarning
 warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*')
