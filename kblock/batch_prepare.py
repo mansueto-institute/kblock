@@ -270,9 +270,10 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
             del gadm_gpd_trim, gadm_gpd_union, gadm_gpd_explode, gadm_gpd_residual
             logging.info(f"Trimmed with residuals gadm_gpd: {gadm_gpd.shape}, {mem_profile()}, {str(round(t1-t0,3))} seconds")
             
-        # Write street geometries
+        # Write street (non-footpath) geometries
         t0 = time.time()
         osm_streets = osm_gpd[osm_gpd['highway'].notnull()]
+        osm_streets = osm_streets[~osm_streets['highway'].isin(['footway', 'bridleway', 'steps', 'corridor', 'path'])]
         osm_streets.to_parquet(Path(street_dir) / f'streets_{country_code}.parquet', compression='snappy')
         t1 = time.time()
         logging.info(f"Writing osm_streets ({osm_streets.shape}) from osm_gpd ({osm_gpd.shape}) ./streets_{country_code}.parquet, {mem_profile()}, {str(round(t1-t0,3))} seconds")
