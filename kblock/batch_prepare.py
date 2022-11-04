@@ -135,39 +135,6 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
     gadm_blocks = gadm_blocks[['block_id','gadm_code','country_code','geometry']].to_crs(epsg=4326)
     return gadm_blocks
 
-
-def index_streets(osm_data: Union[pygeos.Geometry, gpd.GeoDataFrame], gadm_data: gpd.GeoDataFrame, gadm_column: str) -> gpd.GeoDataFrame:
-    """
-    Map the OSM linestrings to GADM boundaries. Includes duplicates 
-    for linestrings that cross multiple GADM boundaries.
-    Args:
-        gadm_data: GeoDataFrame, containing GADM delineations (downloaded from https://gadm.org/data.html), requires CRS WGS 84 EPSG 4326
-        osm_data: GeoDataFrame (or PyGEOS Geometry array), of OSM linestrings requires CRS WGS 84 EPSG 4326
-        gadm_column: string, name of column containing gadm_code
-    Returns:
-        GeoDataFrame with linestrings mapped to 'gadm_code'
-        Geometry projected in CRS WGS 84 EPSG 4326.
-    """
-    assert gadm_data.crs == 'epsg:4326', "gadm_data is not epsg:4326."
-    assert osm_data.crs == 'epsg:4326', "osm_data is not epsg:4326."
-
-    osm_streets = osm_data[osm_data['highway'].notnull()]
-    osm_streets_index = osm_streets.sindex
-    
-    index_1 = osm_streets_index.query_bulk(gadm_data['geometry'], predicate="contains")
-    index_2 = osm_streets_index.query_bulk(gadm_data['geometry'], predicate="intersects")
-    streets_map1 = pd.DataFrame({'index_gadm': index_1[0], 'index_streets': index_1[1]})
-    streets_map2 = pd.DataFrame({'index_gadm': index_2[0], 'index_streets': index_2[1]})
-    
-    streets_map = pd.concat([streets_map1, streets_map2], ignore_index=True)
-    streets_map = streets_map.drop_duplicates()
-    streets_map = streets_map.merge(osm_streets[['id','geometry']], how = 'left', left_on='index_streets', right_index=True)
-    streets_map = streets_map.merge(gadm_data[[gadm_column]], how = 'left', left_on='index_gadm', right_index=True)
-    
-    osm_mapped = gpd.GeoDataFrame(streets_map[['id',gadm_column,'geometry']]).set_crs(epsg=4326)
-    osm_mapped = osm_mapped.rename(columns={gadm_column:"gadm_code"})
-    return osm_mapped
-
 def mem_profile() -> str: 
     """
     Return memory usage, str
@@ -305,7 +272,7 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
             
         # Write street geometries
         t0 = time.time()
-        osm_streets = prepare.index_streets(osm_data = osm_gpd, gadm_data = gadm_gpd, gadm_column = gadm_col)
+        osm_streets = osm_gpd[osm_gpd['highway'].notnull()]
         osm_streets.to_parquet(Path(street_dir) / f'streets_{country_code}.parquet', compression='snappy')
         t1 = time.time()
         logging.info(f"Writing osm_streets ({osm_streets.shape}) from osm_gpd ({osm_gpd.shape}) ./streets_{country_code}.parquet, {mem_profile()}, {str(round(t1-t0,3))} seconds")
