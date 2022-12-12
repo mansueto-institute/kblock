@@ -75,36 +75,38 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
         gadm_country = gadm_country.rename(columns={gadm_col: "gadm_code"})
         gadm_country['country_code'] = country_code
         gadm_country = gadm_country[['gadm_code', 'country_code', 'geometry']]
+        gadm_country['geometry'] = gadm_country['geometry'].make_valid()
 
         # Fix jagged coastlines
         gadm_buffer = pygeos.union_all(pygeos.buffer(pygeos.get_parts(pygeos.from_shapely(gadm_country['geometry'].to_crs(3395))),3000))
         coastal_buffer = pygeos.union_all(pygeos.intersection(pygeos.from_shapely(daylight_coastal_water['geometry'].to_crs(3395)), pygeos.envelope(gadm_buffer)))
         if pygeos.is_empty(coastal_buffer) == False:
             logging.info(f"Buffering coastline")
-
             fix_envelope = pygeos.envelope(pygeos.intersection(coastal_buffer, pygeos.union_all(pygeos.get_parts(pygeos.from_shapely(gadm_country['geometry'].to_crs(3395))))))
             land_buffer = pygeos.intersection(pygeos.from_shapely(daylight_inland_land['geometry'].to_crs(3395)), pygeos.buffer(pygeos.union_all(coastal_buffer),3000))
             land_buffer = pygeos.intersection(land_buffer, fix_envelope)
-            coast_fixes = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(pygeos.to_shapely(pygeos.get_parts(land_buffer[~pygeos.is_empty(land_buffer)]))).set_crs(3395).to_crs(4326)}).set_crs(4326)
-            coast_fixes = gpd.overlay(df1 = coast_fixes, df2 = gadm_country, how = 'difference', keep_geom_type = True, make_valid = True)
-            coast_fixes = gpd.overlay(df1 = coast_fixes, df2 = osm_inland_water, how = 'difference', keep_geom_type = True, make_valid = True)
-            coast_fixes = gpd.overlay(df1 = coast_fixes, df2 = daylight_coastal_water, how = 'difference', keep_geom_type = True, make_valid = True)
-            coast_fixes = coast_fixes.explode(ignore_index = True)
-            coast_fixes['geometry'] = coast_fixes['geometry'].to_crs(3395).buffer(0.001).buffer(-0.001).to_crs(4326)
-            coast_fixes = gpd.sjoin_nearest(left_df = coast_fixes.to_crs(3395), right_df = gadm_country.to_crs(3395), how = 'left').to_crs(4326)
-            gadm_country = pd.concat([gadm_country, coast_fixes[['gadm_code','country_code','geometry']]], ignore_index=True)
-            gadm_country['geometry'] = gadm_country['geometry'].make_valid()
-            gadm_country = gadm_country.dissolve(by=['gadm_code', 'country_code'], as_index=False)
-            if gadm_country['gadm_code'].isnull().values.any(): 
-                raise TypeError(f"{country_code}: GADM column contains null.")
-            gadm_country['geometry'] = gadm_country['geometry'].make_valid()
+            if all(pygeos.is_empty(land_buffer)) == False:
+                coast_fixes = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(pygeos.to_shapely(pygeos.get_parts(land_buffer[~pygeos.is_empty(land_buffer)]))).set_crs(3395).to_crs(4326)}).set_crs(4326)
+                coast_fixes = gpd.overlay(df1 = coast_fixes, df2 = gadm_country, how = 'difference', keep_geom_type = True, make_valid = True)
+                coast_fixes = gpd.overlay(df1 = coast_fixes, df2 = osm_inland_water, how = 'difference', keep_geom_type = True, make_valid = True)
+                coast_fixes = gpd.overlay(df1 = coast_fixes, df2 = daylight_coastal_water, how = 'difference', keep_geom_type = True, make_valid = True)
+                coast_fixes = coast_fixes.explode(ignore_index = True)
+                coast_fixes['geometry'] = coast_fixes['geometry'].to_crs(3395).buffer(0.001).buffer(-0.001).to_crs(4326)
+                coast_fixes = gpd.sjoin_nearest(left_df = coast_fixes.to_crs(3395), right_df = gadm_country.to_crs(3395), how = 'left').to_crs(4326)
+                gadm_country = pd.concat([gadm_country, coast_fixes[['gadm_code','country_code','geometry']]], ignore_index=True)
+                gadm_country['geometry'] = gadm_country['geometry'].make_valid()
+                gadm_country = gadm_country.dissolve(by=['gadm_code', 'country_code'], as_index=False)
+                if gadm_country['gadm_code'].isnull().values.any(): 
+                    raise TypeError(f"{country_code}: GADM column contains null.")
+                gadm_country['geometry'] = gadm_country['geometry'].make_valid()
             
         # Remove non-polygons from GeometryCollection GADMs
         if not all(x in ['Polygon','MultiPolygon'] for x in gadm_country['geometry'].geom_type.unique()):
             gadm_country = gadm_country.explode(index_parts=False)
             gadm_country = gadm_country[gadm_country['geometry'].geom_type == 'Polygon']
             gadm_country = gadm_country.dissolve(by='gadm_code', as_index=False)
-
+            gadm_country['geometry'] = gadm_country['geometry'].make_valid()
+            
         # Combine countries
         gadm_country.to_parquet(Path(gadm_output_dir) / f'gadm_{country_code}.parquet', compression='snappy')
         gadm_combo = pd.concat([gadm_combo, gadm_country], ignore_index=True)

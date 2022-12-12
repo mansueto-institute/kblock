@@ -27,6 +27,7 @@ def main(ghsl_dir: Path, blocks_dir: Path, output_dir: Path):
     ghsl_data = ghsl_data[['urban_id','urban_center_name','list_of_urban_center_names','primary_country_code','primary_country_name','geographical_subregion','geographical_region','urban_area','urban_radius','latitude', 'longitude', 'geometry']]
     ghsl_data = ghsl_data[ghsl_data['urban_center_name'] != 'N/A']
     ghsl_data = ghsl_data.explode(index_parts=False)
+    # ghsl_data['urban_id'] = ghsl_data['urban_id'].astype('int')
     assert ghsl_data[ghsl_data['urban_id'].duplicated()].shape[0] == 0
     
     # Urban centers
