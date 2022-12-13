@@ -87,24 +87,33 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
             land_buffer = pygeos.intersection(land_buffer, fix_envelope)
             if all(pygeos.is_empty(land_buffer)) == False:
                 coast_fixes = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(pygeos.to_shapely(pygeos.get_parts(land_buffer[~pygeos.is_empty(land_buffer)]))).set_crs(3395).to_crs(4326)}).set_crs(4326)
+                coast_fixes = coast_fixes.explode(index_parts=False)
                 coast_fixes = coast_fixes[coast_fixes.geom_type == "Polygon"]
                 coast_fixes = gpd.overlay(df1 = coast_fixes, df2 = gadm_country, how = 'difference', keep_geom_type = True, make_valid = True)
 
                 coast_fixes['geometry'] = coast_fixes['geometry'].make_valid()
+                coast_fixes = coast_fixes.explode(index_parts=False)
                 coast_fixes = coast_fixes[coast_fixes.geom_type == "Polygon"]
+
                 osm_inland_water['geometry'] = osm_inland_water['geometry'].make_valid()
+                osm_inland_water = osm_inland_water.explode(index_parts=False)
                 osm_inland_water = osm_inland_water[osm_inland_water.geom_type == "Polygon"]
                 coast_fixes = gpd.overlay(df1 = coast_fixes, df2 = osm_inland_water, how = 'difference', keep_geom_type = True, make_valid = True)
                 
                 coast_fixes['geometry'] = coast_fixes['geometry'].make_valid()
+                coast_fixes = coast_fixes.explode(index_parts=False)
                 coast_fixes = coast_fixes[coast_fixes.geom_type == "Polygon"]
+
                 daylight_coastal_water['geometry'] = daylight_coastal_water['geometry'].make_valid()
+                daylight_coastal_water = daylight_coastal_water.explode(index_parts=False)
                 daylight_coastal_water = daylight_coastal_water[daylight_coastal_water.geom_type == "Polygon"]
                 coast_fixes = gpd.overlay(df1 = coast_fixes, df2 = daylight_coastal_water, how = 'difference', keep_geom_type = True, make_valid = True)
 
                 coast_fixes = coast_fixes.explode(ignore_index = True)
                 coast_fixes['geometry'] = coast_fixes['geometry'].to_crs(3395).buffer(0.001).buffer(-0.001).to_crs(4326)
+                coast_fixes = coast_fixes[coast_fixes.geom_type == "Polygon"]
                 coast_fixes = gpd.sjoin_nearest(left_df = coast_fixes.to_crs(3395), right_df = gadm_country.to_crs(3395), how = 'left').to_crs(4326)
+                
                 gadm_country = pd.concat([gadm_country, coast_fixes[['gadm_code','country_code','geometry']]], ignore_index=True)
                 gadm_country['geometry'] = gadm_country['geometry'].make_valid()
                 gadm_country = gadm_country.dissolve(by=['gadm_code', 'country_code'], as_index=False)
