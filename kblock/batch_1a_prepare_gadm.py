@@ -79,10 +79,10 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
 
         # Fix jagged coastlines
         gadm_buffer = pygeos.union_all(pygeos.buffer(pygeos.get_parts(pygeos.from_shapely(gadm_country['geometry'].to_crs(3395))),3000))
-        coastal_buffer = pygeos.union_all(pygeos.intersection(pygeos.from_shapely(daylight_coastal_water['geometry'].to_crs(3395)), pygeos.envelope(gadm_buffer)))
+        coastal_buffer = pygeos.union_all(pygeos.intersection(pygeos.from_shapely(daylight_coastal_water['geometry'].to_crs(3395)), pygeos.convex_hull(gadm_buffer))) 
         if pygeos.is_empty(coastal_buffer) == False:
             logging.info(f"Buffering coastline")
-            fix_envelope = pygeos.envelope(pygeos.intersection(coastal_buffer, pygeos.union_all(pygeos.get_parts(pygeos.from_shapely(gadm_country['geometry'].to_crs(3395))))))
+            fix_envelope = pygeos.convex_hull(pygeos.intersection(coastal_buffer, pygeos.union_all(pygeos.get_parts(pygeos.from_shapely(gadm_country['geometry'].to_crs(3395))))))
             land_buffer = pygeos.intersection(pygeos.from_shapely(daylight_inland_land['geometry'].to_crs(3395)), pygeos.buffer(pygeos.union_all(coastal_buffer),3000))
             land_buffer = pygeos.intersection(land_buffer, fix_envelope)
             if all(pygeos.is_empty(land_buffer)) == False:
