@@ -6,7 +6,7 @@
 
 #iso_list=(DJI CPV COM STP SYC)
 
-iso_list=(ETH)
+iso_list=(AGO GNB CMR)
 
 working_directory=/Users/nm/Downloads/update
 
