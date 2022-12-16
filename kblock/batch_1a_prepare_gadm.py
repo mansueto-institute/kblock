@@ -32,6 +32,14 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
     if len(in_chunk_not_in_gadm_inputs) > 0:
         raise ValueError(f'GADM input data does not exist for {in_chunk_not_in_gadm_inputs} in country_chunk argument.')
 
+    # Consolidate GADM data into one file
+    all_gadm_gpd = gpd.GeoDataFrame({'GID_0': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
+    for country_code in gadm_input_list: 
+        gadm_gpd = gpd.read_file(Path(gadm_dir) / f'gadm_{country_code}.geojson')
+        gadm_gpd = gadm_gpd[['GID_0', 'geometry']]
+        gadm_gpd = gadm_gpd.dissolve(by='GID_0', as_index=False)
+        all_gadm_gpd = pd.concat([all_gadm_gpd, gadm_gpd], ignore_index=True)        
+
     # Check for completed countries in output_dir
     output_file_list = list(filter(re.compile("gadm_").match, sorted(list(os.listdir(Path(gadm_output_dir))))))
     output_country_list = [(re.sub('gadm_', '', re.sub('.parquet', '', i))) for i in output_file_list] 
@@ -85,8 +93,11 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
             fix_envelope = pygeos.convex_hull(pygeos.intersection(coastal_buffer, pygeos.union_all(pygeos.get_parts(pygeos.from_shapely(gadm_country['geometry'].to_crs(3395))))))
             land_buffer = pygeos.intersection(pygeos.from_shapely(daylight_inland_land['geometry'].to_crs(3395)), pygeos.buffer(pygeos.union_all(coastal_buffer),3000))
             land_buffer = pygeos.intersection(land_buffer, fix_envelope)
+
             if all(pygeos.is_empty(land_buffer)) == False:
-                coast_fixes = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(pygeos.to_shapely(pygeos.get_parts(land_buffer[~pygeos.is_empty(land_buffer)]))).set_crs(3395).to_crs(4326)}).set_crs(4326)
+
+                land_buffer = pygeos.to_shapely(pygeos.get_parts(land_buffer[~pygeos.is_empty(land_buffer)]))
+                coast_fixes = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(land_buffer).set_crs(3395).to_crs(4326)}).set_crs(4326)
                 coast_fixes = coast_fixes.explode(index_parts=False)
                 coast_fixes = coast_fixes[coast_fixes.geom_type == "Polygon"]
                 coast_fixes = gpd.overlay(df1 = coast_fixes, df2 = gadm_country, how = 'difference', keep_geom_type = True, make_valid = True)
@@ -109,8 +120,17 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
                 daylight_coastal_water = daylight_coastal_water[daylight_coastal_water.geom_type == "Polygon"]
                 coast_fixes = gpd.overlay(df1 = coast_fixes, df2 = daylight_coastal_water, how = 'difference', keep_geom_type = True, make_valid = True)
 
+                other_countries = all_gadm_gpd[~all_gadm_gpd['GID_0'].isin([country_code])].to_crs(4326)
+                coast_fixes = gpd.overlay(df1 = coast_fixes, df2 = other_countries, how = 'difference', keep_geom_type = True, make_valid = True)
+
                 coast_fixes = coast_fixes.explode(ignore_index = True)
-                coast_fixes['geometry'] = coast_fixes['geometry'].to_crs(3395).buffer(0.001).buffer(-0.001).to_crs(4326)
+                
+                area_selection = pygeos.from_shapely(all_gadm_gpd[all_gadm_gpd['GID_0'].isin([country_code])].to_crs(3395).buffer(500).to_crs(4326))
+                coast_fixes = pygeos.from_shapely(coast_fixes['geometry'])
+                coast_fixes = pygeos.to_shapely(coast_fixes[pygeos.intersects(coast_fixes, area_selection)])
+                coast_fixes = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(coast_fixes)}).set_crs(4326)
+
+                #coast_fixes['geometry'] = coast_fixes['geometry'].to_crs(3395).buffer(0.001).buffer(-0.001).to_crs(4326)
                 coast_fixes = coast_fixes[coast_fixes.geom_type == "Polygon"]
                 coast_fixes = gpd.sjoin_nearest(left_df = coast_fixes.to_crs(3395), right_df = gadm_country.to_crs(3395), how = 'left').to_crs(4326)
                 
@@ -120,7 +140,8 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
                 if gadm_country['gadm_code'].isnull().values.any(): 
                     raise TypeError(f"{country_code}: GADM column contains null.")
                 gadm_country['geometry'] = gadm_country['geometry'].make_valid()
-            
+
+
         # Remove non-polygons from GeometryCollection GADMs
         if not all(x in ['Polygon','MultiPolygon'] for x in gadm_country['geometry'].geom_type.unique()):
             gadm_country = gadm_country.explode(index_parts=False)
@@ -130,10 +151,10 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
             
         # Combine countries
         gadm_country.to_parquet(Path(gadm_output_dir) / f'gadm_{country_code}.parquet', compression='snappy')
-        gadm_combo = pd.concat([gadm_combo, gadm_country], ignore_index=True)
+        #gadm_combo = pd.concat([gadm_combo, gadm_country], ignore_index=True)
         t1 = time.time()
         logging.info(f"Finished {country_code}: {gadm_country.shape} {str(round(t1-t0,3)/60)} minutes")
-    gadm_combo.to_parquet(Path(output_dir) / f'all_gadm.parquet', compression='snappy')
+    #gadm_combo.to_parquet(Path(output_dir) / f'all_gadm.parquet', compression='snappy')
     logging.info(f"Finished")
 
 def setup(args=None):

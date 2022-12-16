@@ -63,6 +63,11 @@ brew install osmium-tool
 cd /users/project/kblock/deploy/0-ingest-data/
 bash deploy_download.sh -o users/project/inputs
 ```
+
+##### Download the Natural Earth Countries
+https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/10m/cultural/ne_10m_admin_0_countries.zip
+
+
 ##### Download [LandScan 2020 1 kilometer grid](https://landscan.ornl.gov/) from Oak Ridge National Laboratory
 `mkdir -p users/project/inputs/rasters/landscan` and add file `/landscan-global-2020.tif`
 ##### Download [WorldPop 2020 Constrained 100 meter grid](https://data.worldpop.org/GIS/Population/Global_2000_2020_Constrained/2020/maxar_v1/)
