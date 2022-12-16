@@ -161,7 +161,7 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
     gadm_output_list = [(re.sub('gadm_', '', re.sub('.parquet', '', i))) for i in gadm_output_list] 
     gadm_combo = gpd.GeoDataFrame({'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
     for country_code in gadm_output_list: 
-        gadm_clean = gpd.read_file(Path(gadm_output_dir) / f'gadm_{country_code}.parquet')
+        gadm_clean = gpd.read_parquet(Path(gadm_output_dir) / f'gadm_{country_code}.parquet')
         gadm_combo = pd.concat([gadm_combo, gadm_clean], ignore_index=True)   
     # add code to reconcile minor overlaps
     gadm_combo.to_parquet(Path(output_dir) / f'all_gadm.parquet', compression='snappy')
