@@ -155,15 +155,6 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
         t1 = time.time()
         logging.info(f"Finished {country_code}: {gadm_country.shape} {str(round(t1-t0,3)/60)} minutes")
     #gadm_combo.to_parquet(Path(output_dir) / f'all_gadm.parquet', compression='snappy')
-
-    # Consolidate GADM data into one file
-    gadm_output_list = list(filter(re.compile("gadm_").match, sorted(list(os.listdir(Path(gadm_output_dir))))))
-    gadm_output_list = [(re.sub('gadm_', '', re.sub('.parquet', '', i))) for i in gadm_output_list] 
-    all_gadm_gpd = gpd.GeoDataFrame({'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
-    for country_code in gadm_output_list: 
-        gadm_gpd = gpd.read_file(Path(gadm_output_dir) / f'gadm_{country_code}.parquet')
-        all_gadm_gpd = pd.concat([all_gadm_gpd, gadm_gpd], ignore_index=True)    
-        
     logging.info(f"Finished")
 
 def setup(args=None):
