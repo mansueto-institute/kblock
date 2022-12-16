@@ -46,7 +46,8 @@ def main(ghsl_dir: Path, blocks_dir: Path, output_dir: Path):
     urban_centers = ghsl_data[['urban_id','geometry']].to_crs(4326)
     
     # Periurban zones based on minimum bounding circle
-    periurban_inner = pygeos.from_shapely(ghsl_data['geometry'].buffer(ghsl_data['urban_radius']*1))
+    #periurban_inner = pygeos.from_shapely(ghsl_data['geometry'].buffer(ghsl_data['urban_radius']*1))
+    periurban_inner = pygeos.from_shapely(ghsl_data['geometry'].buffer(10000))
     periurban_inner = pygeos.get_parts(pygeos.union_all(periurban_inner))
     periurban_inner = gpd.GeoDataFrame.from_dict({'geometry': pygeos.to_shapely(periurban_inner)}).set_crs(epsg=3395)
     periurban_inner = periurban_inner.assign(conurbation_id = [str(x) for x in list(periurban_inner.index)])
