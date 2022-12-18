@@ -4,12 +4,12 @@
 #SBATCH --partition=bigmem2
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --mem=320000
+#SBATCH --mem=240000
 #SBATCH --output=/project2/bettencourt/mnp/update/jobs/deploy_2_prepare_buildings_bigmem.out
 #SBATCH --error=/project2/bettencourt/mnp/update/jobs/deploy_2_prepare_buildings_bigmem.err
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=nmarchio@uchicago.edu
-#SBATCH --time=36:00:00
+#SBATCH --time=16:00:00
 #SBATCH --account=pi-bettencourt
 
 module load python/anaconda-2021.05
