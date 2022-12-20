@@ -307,7 +307,7 @@ def allocate_population(pixel_data: pd.DataFrame, population_col: str, country_c
             pop_adjust = block_population[block_population['building_area'] == 0].groupby(['gadm_code']).agg({'building_population': 'sum'}).reset_index().rename(columns={"building_population":"building_population_adjust"})
             pop_residual = sum(pop_adjust['building_population_adjust'])
             # Remove blocks with no building area
-            block_population = block_population[block_population['building_area'] > 0 | block_population['building_area'].notnull()]
+            block_population = block_population.loc[(block_population['building_area'] > 0) | (block_population['building_area'].notnull())]
     
             print_allocated_population = str(round(sum(block_population['building_population']),2)) + ' ' + str(round((sum(block_population['building_population'])/population_total)*100,3)) + '%'
             print('Running sum of population allocated: ',print_allocated_population)
