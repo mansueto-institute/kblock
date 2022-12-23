@@ -17,6 +17,7 @@ output_suffix=.parquet
 valid_codes=(NGA ZAF ETH SDN TZA KEN COD UGA MOZ BFA ZWE AGO MLI GHA NER MDG TCD ZMB MWI CMR CIV SEN GIN BEN RWA SSD TGO SOM NAM BDI MRT BWA ERI CAF COG SLE LSO LBR SWZ GAB GMB MUS GNB GNQ CPV COM ESH DJI STP SYC)
 
 mkdir -p "$template_dir"
+mkdir -p /project2/bettencourt/mnp/update/jobs/complexity_jobs
 
 input_list=()
 for i in $input_dir$input_prefix*$input_suffix; do
