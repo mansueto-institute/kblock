@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=compute_k_::COUNTRYCODE::
+#SBATCH --job-name=::COUNTRYCODE::
 #SBATCH --partition=broadwl
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
