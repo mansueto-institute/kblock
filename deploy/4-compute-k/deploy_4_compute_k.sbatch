@@ -13,8 +13,6 @@
 #SBATCH --time=36:00:00
 #SBATCH --account=pi-bettencourt
 
-module load python/anaconda-2021.05
-source activate geospatial
 
 country_chunk=(::COUNTRYCODE::)
 
