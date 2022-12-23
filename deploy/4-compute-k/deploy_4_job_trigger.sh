@@ -6,7 +6,7 @@ cnetid=nmarchio
 template_dir=/project2/bettencourt/mnp/update/jobs/filled_templates
 sbatch_file=/project2/bettencourt/mnp/update/repo/kblock/deploy/4-compute-k/deploy_4_compute_k.sbatch
 
-input_dir=/project2/bettencourt/mnp/update/outputs/buildings/points
+input_dir=/project2/bettencourt/mnp/update/outputs/buildings/points/
 input_prefix=buildings_points_
 input_suffix=.parquet
 
