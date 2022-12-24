@@ -6,8 +6,8 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=21
 #SBATCH --mem=56000
-#SBATCH --output=/project2/bettencourt/mnp/update/jobs/complexity_jobs/job_::COUNTRYCODE::.out
-#SBATCH --error=/project2/bettencourt/mnp/update/jobs/complexity_jobs/job_::COUNTRYCODE::.err
+#SBATCH --output=/project2/bettencourt/mnp/update/jobs/complexity_jobs/::COUNTRYCODE::.out
+#SBATCH --error=/project2/bettencourt/mnp/update/jobs/complexity_jobs/::COUNTRYCODE::.err
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=nmarchio@uchicago.edu
 #SBATCH --time=36:00:00
