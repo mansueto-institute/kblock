@@ -4,7 +4,7 @@
 #SBATCH --partition=broadwl
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=21
+#SBATCH --cpus-per-task=28
 #SBATCH --mem=56000
 #SBATCH --output=/project2/bettencourt/mnp/update/jobs/complexity_jobs/::COUNTRYCODE::.out
 #SBATCH --error=/project2/bettencourt/mnp/update/jobs/complexity_jobs/::COUNTRYCODE::.err
