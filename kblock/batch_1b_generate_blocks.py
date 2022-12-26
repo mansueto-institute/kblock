@@ -120,6 +120,7 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
     gadm_blocks['geometry'] = gadm_blocks['geometry'].make_valid()
     gadm_blocks = gadm_blocks.explode(index_parts=False)
     gadm_blocks = gadm_blocks[gadm_blocks.geom_type == "Polygon"]
+    gadm_blocks = gadm_blocks[round(gadm_blocks['geometry'].to_crs(3395).area,2) > 0]
 
     gadm_blocks = gadm_blocks.assign(block_id = [gadm_code + '_' + str(x) for x in list(gadm_blocks.index)])
     
@@ -128,8 +129,8 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
         representative_pt = gadm_blocks.geometry.representative_point().to_list()
     precision_level = 18
     gadm_blocks['block_geohash'] = list(map(lambda x: pygeohash.encode(x.x,x.y, precision=precision_level), representative_pt))
-
-    gadm_blocks = gadm_blocks[['block_id','block_geohash','gadm_code','country_code','geometry']].to_crs(epsg=4326)
+    gadm_blocks = gadm_blocks[['block_id','block_geohash','gadm_code','country_code','geometry']].reset_index(drop = True).to_crs(epsg=4326)
+    
     return gadm_blocks
 
 def mem_profile() -> str: 
