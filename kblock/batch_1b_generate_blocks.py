@@ -15,9 +15,11 @@ import psutil
 import warnings
 import logging
 import time
+import math
 import re
 import os
 import argparse
+import dask_geopandas
 import pygeohash
 np.set_printoptions(suppress=True)
 warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*')
@@ -94,10 +96,10 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
     gadm_data = gadm_data.explode(index_parts=False)
     gadm_data = gadm_data[gadm_data['geometry'].geom_type == 'Polygon']
 
-    gadm_data = pygeos.from_shapely(gadm_data['geometry'])
-    gadm_data = pygeos.multipolygons(gadm_data)
-    osm_data = pygeos.line_merge(pygeos.intersection(pygeos.multilinestrings(osm_data),gadm_data))
-    gadm_lines = pygeos.line_merge(pygeos.multilinestrings(pygeos.get_exterior_ring(pygeos.get_parts(gadm_data))))
+    gadm_array = pygeos.from_shapely(gadm_data['geometry'])
+    gadm_array = pygeos.multipolygons(gadm_array)
+    osm_data = pygeos.line_merge(pygeos.intersection(pygeos.multilinestrings(osm_data),gadm_array))
+    gadm_lines = pygeos.line_merge(pygeos.multilinestrings(pygeos.get_exterior_ring(pygeos.get_parts(gadm_array))))
 
     polys = pygeos.polygonize_full([pygeos.union(osm_data,gadm_lines)])[0]
     polys = pygeos.get_parts(pygeos.normalize(pygeos.get_parts(polys))) 
@@ -113,6 +115,8 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
         polys_all = pd.concat([gadm_blocks['geometry'], gpd.GeoSeries(all_intersections).set_crs(4326)])
         polys = list(shapely.ops.polygonize(polys_all.boundary.unary_union))
         gadm_blocks = gpd.GeoDataFrame.from_dict({"country_code": gadm_code[0:3],"gadm_code": gadm_code,'geometry': gpd.GeoSeries(polys)}).set_crs(4326).reset_index(drop=True)  
+
+    gadm_blocks = gpd.overlay(df1 = gadm_blocks, df2 = gadm_data[['geometry']], how='intersection', keep_geom_type = True, make_valid = True)
 
     gadm_blocks = gadm_blocks.assign(block_id = [gadm_code + '_' + str(x) for x in list(gadm_blocks.index)])
     
@@ -213,7 +217,19 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         # Write block geometries
         block_bulk.to_parquet(Path(block_dir) / f'blocks_{country_code}.parquet', compression='snappy')
         logging.info(f"Finished {country_code}.")
-        
+
+        # Final check for overlaps
+        num_partitions = math.ceil(block_bulk.shape[0]/50000)
+        block_bulk_check = dask_geopandas.from_geopandas(block_bulk, npartitions = num_partitions)
+        block_bulk_check = dask_geopandas.sjoin(left = block_bulk_check, right = block_bulk_check, predicate="within")
+        block_bulk_check = block_bulk_check.compute()
+        block_bulk_check_list = block_bulk_check[block_bulk_check['block_id_left'] != block_bulk_check['block_id_right']]
+        if block_bulk_check_list.shape[0] > 0:
+            block_bulk_check_list = block_bulk_check_list[['block_id_left','block_id_right']].drop_duplicates().reset_index(drop = True).groupby('block_id_left')['block_id_right'].apply(list).to_dict()
+            logging.info(f"Overlaying geometries: {block_bulk_check_list}")
+            assert block_bulk.shape[0] == block_bulk_check.shape[0], "Overlays: Not same number of rows."
+            assert block_bulk_check[block_bulk_check['block_id_left'] == block_bulk_check['block_id_right']].shape[0], 'Overlays: Not identical sjoin.'
+            
     logging.info(f"Finished.")
 
 def setup(args=None):    
