@@ -12,6 +12,8 @@ import re
 import time
 import argparse
 import logging
+import math
+import dask_geopandas
 np.set_printoptions(suppress=True)
 warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*')
 warnings.filterwarnings('ignore', message='.*dropped geometries of different geometry types than.*')
@@ -24,6 +26,15 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
     # Make directory
     gadm_output_dir = str(output_dir) + '/parquet'
     Path(gadm_output_dir).mkdir(parents=True, exist_ok=True)
+
+    gpkg_dir = str(output_dir) + '/gpkg'
+    Path(gpkg_dir).mkdir(parents=True, exist_ok=True)
+
+    overlaps_dir = str(output_dir) + '/overlaps'
+    Path(overlaps_dir).mkdir(parents=True, exist_ok=True)
+
+    combined_dir = str(output_dir) + '/combined'
+    Path(combined_dir).mkdir(parents=True, exist_ok=True)
 
     # Check GADM files in gadm_dir
     gadm_input_list = list(filter(re.compile("gadm_").match, sorted(list(os.listdir(Path(gadm_dir))))))
@@ -64,8 +75,6 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
     daylight_coastal_water = daylight_coastal_water.to_crs(4326)
 
     # Iterate through country codes
-    #gadm_combo = gpd.GeoDataFrame({'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
-
     for country_code in country_list: 
         print(country_code)
         t0 = time.time()
@@ -76,7 +85,8 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
         osm_inland_water = gpd.read_parquet(Path(osm_dir) / f'{country_code}-polygon.parquet')
         osm_inland_water = osm_inland_water[~osm_inland_water['natural'].isin(['coastline'])]
         gadm_country = gpd.read_file(Path(gadm_dir) / f'gadm_{country_code}.geojson')
-        gadm_country['geometry'] = gadm_country['geometry'].to_crs(3395).buffer(0.001).buffer(-0.001).to_crs(4326)
+        gadm_country['geometry'] = gadm_country['geometry'].make_valid()
+        # gadm_country['geometry'] = gadm_country['geometry'].to_crs(3395).buffer(0.001).buffer(-0.001).to_crs(4326)
         gadm_country = gpd.overlay(df1 = gadm_country, df2 = daylight_coastal_water, how = 'difference', keep_geom_type = True, make_valid = True)
         gadm_country = gpd.overlay(df1 = gadm_country, df2 = osm_inland_water, how = 'difference', keep_geom_type = True, make_valid = True)
         gadm_col = max(list(filter(re.compile("GID_*").match, list(gadm_country.columns))))
@@ -132,29 +142,48 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
 
                 #coast_fixes['geometry'] = coast_fixes['geometry'].to_crs(3395).buffer(0.001).buffer(-0.001).to_crs(4326)
                 coast_fixes = coast_fixes[coast_fixes.geom_type == "Polygon"]
+                coast_fixes = coast_fixes.assign(fix_id = [str(x) for x in list(coast_fixes.index)])
                 coast_fixes = gpd.sjoin_nearest(left_df = coast_fixes.to_crs(3395), right_df = gadm_country.to_crs(3395), how = 'left').to_crs(4326)
+                coast_fixes = coast_fixes.drop_duplicates(subset=['fix_id'], keep='first')
                 
                 gadm_country = pd.concat([gadm_country, coast_fixes[['gadm_code','country_code','geometry']]], ignore_index=True)
                 gadm_country['geometry'] = gadm_country['geometry'].make_valid()
+                gadm_country = gadm_country[round(gadm_country['geometry'].to_crs(3395).area,0) > 0]
                 gadm_country = gadm_country.dissolve(by=['gadm_code', 'country_code'], as_index=False)
                 if gadm_country['gadm_code'].isnull().values.any(): 
                     raise TypeError(f"{country_code}: GADM column contains null.")
                 gadm_country['geometry'] = gadm_country['geometry'].make_valid()
 
-
         # Remove non-polygons from GeometryCollection GADMs
         if not all(x in ['Polygon','MultiPolygon'] for x in gadm_country['geometry'].geom_type.unique()):
             gadm_country = gadm_country.explode(index_parts=False)
             gadm_country = gadm_country[gadm_country['geometry'].geom_type == 'Polygon']
+            gadm_country = gadm_country[round(gadm_country['geometry'].to_crs(3395).area,0) > 0]
             gadm_country = gadm_country.dissolve(by='gadm_code', as_index=False)
             gadm_country['geometry'] = gadm_country['geometry'].make_valid()
             
-        # Combine countries
+        # Write countries
         gadm_country.to_parquet(Path(gadm_output_dir) / f'gadm_{country_code}.parquet', compression='snappy')
-        #gadm_combo = pd.concat([gadm_combo, gadm_country], ignore_index=True)
+        gadm_country.to_file(Path(gpkg_dir) / f'gadm_{country_code}.gpkg', driver="GPKG")
+
+        # Check for overlaps
+        gadm_country_overlaps = gpd.overlay(df1 = gadm_country, df2 = gadm_country, how = 'intersection', keep_geom_type = True, make_valid = True)
+        gadm_country_overlaps = gadm_country_overlaps[gadm_country_overlaps['gadm_code_1'] != gadm_country_overlaps['gadm_code_2']]
+        if gadm_country_overlaps.shape[0] > 0:
+            gadm_country_overlaps = gadm_country_overlaps.assign(area = round(gadm_country_overlaps.to_crs(3395).area,0))
+            overlap_count = gadm_country_overlaps[gadm_country_overlaps['area'] > 100].shape[0]
+            if overlap_count > 0:
+                gadm_country_overlaps['gadm_code'] = gadm_country_overlaps[['gadm_code_1', 'gadm_code_2']].bfill(axis=1).iloc[:, 0]
+                gadm_country_overlaps['country_code'] = gadm_country_overlaps[['country_code_1', 'country_code_2']].bfill(axis=1).iloc[:, 0]
+                logging.info(f"Overlaps over 100m2: {gadm_country_overlaps[gadm_country_overlaps['area'] > 100].shape[0]}")
+                logging.info(f"{gadm_country_overlaps['gadm_code'].unique()}")
+                gadm_country_overlaps = gadm_country_overlaps.dissolve(by=['gadm_code', 'country_code'], as_index=False)
+                gadm_country_overlaps = gadm_country_overlaps[['gadm_code','country_code','geometry']].reset_index(drop = True)
+                gadm_country_overlaps['geometry'] = gadm_country_overlaps['geometry'].make_valid()
+                gadm_country_overlaps.to_file(Path(overlaps_dir) / f'overlaps_{country_code}.gpkg', driver="GPKG")
+
         t1 = time.time()
         logging.info(f"Finished {country_code}: {gadm_country.shape} {str(round(t1-t0,3)/60)} minutes")
-    #gadm_combo.to_parquet(Path(output_dir) / f'all_gadm.parquet', compression='snappy')
 
     # Consolidate GADM data into one file
     gadm_output_list = list(filter(re.compile("gadm_").match, sorted(list(os.listdir(Path(gadm_output_dir))))))
@@ -163,9 +192,10 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
     for country_code in gadm_output_list: 
         gadm_clean = gpd.read_parquet(Path(gadm_output_dir) / f'gadm_{country_code}.parquet')
         gadm_combo = pd.concat([gadm_combo, gadm_clean], ignore_index=True)   
-    # add code to reconcile minor overlaps
-    gadm_combo.to_parquet(Path(output_dir) / f'all_gadm.parquet', compression='snappy')
-        
+    
+    gadm_combo.to_parquet(Path(combined_dir) / f'all_gadm.parquet', compression='snappy')
+    gadm_combo.to_file(Path(combined_dir) / f'all_gadm.gpkg', driver="GPKG")
+
     logging.info(f"Finished")
 
 def setup(args=None):
