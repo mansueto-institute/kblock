@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import warnings
 import itertools
+import shapely.ops
 import re
 import time
 import argparse
