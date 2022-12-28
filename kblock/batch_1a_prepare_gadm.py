@@ -227,9 +227,9 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
                 gadm_country['geometry'] = gadm_country['geometry'].make_valid()
 
         # Ensure no overlaps with surrounding countries
-        other_countries = all_gadm_gpd[~all_gadm_gpd['GID_0'].isin([country_code])].to_crs(4326)
-        gadm_country = gpd.overlay(df1 = gadm_country, df2 = other_countries, how = 'difference', keep_geom_type = True, make_valid = True)
-        gadm_country['geometry'] = gadm_country['geometry'].make_valid()
+        # other_countries = all_gadm_gpd[~all_gadm_gpd['GID_0'].isin([country_code])].to_crs(4326)
+        # gadm_country = gpd.overlay(df1 = gadm_country, df2 = other_countries, how = 'difference', keep_geom_type = True, make_valid = True)
+        # gadm_country['geometry'] = gadm_country['geometry'].make_valid()
 
         # Remove non-polygons from GeometryCollection GADMs
         if not all(x in ['Polygon','MultiPolygon'] for x in gadm_country['geometry'].geom_type.unique()):
