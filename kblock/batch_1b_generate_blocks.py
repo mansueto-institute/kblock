@@ -72,6 +72,78 @@ def compute_area(geometry: pygeos.Geometry, epsg_from = "EPSG:4326", epsg_to = "
     data = pygeos.area(pygeos.set_coordinates(geometry.copy(), np.array(new_coords).T))
     return data
 
+def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: int = 10) -> gpd.GeoDataFrame:
+    """ 
+    Args:
+        data: GeoDataFrame, containing delineations, requires CRS WGS 84 EPSG 4326.
+        group_column: str, column name with label uniquely identifying each row geometry.
+        partition_count: number of partitions to use with dask_geopandas.sjoin(), defaults to 10.
+    Returns:
+        GeoDataFrame with all overlapping geometries removed. 
+        Assigns overlapping sections to the geometry group_column with most area in common or is closest.
+    """
+    column_list = list(data.columns)
+
+    column_list_no_geo = list(data.columns)
+    column_list_no_geo.remove('geometry')
+
+    column_list_id = list(data.columns)
+    column_list_id.remove('geometry')
+    column_list_id.append('overlap_id')
+
+    data_overlap = dask_geopandas.from_geopandas(data, npartitions = partition_count)
+    data_overlap = dask_geopandas.sjoin(left = data_overlap, right = data_overlap, predicate="overlaps")
+    data_overlap = data_overlap.compute()
+
+    if data_overlap.shape[0] > 0: 
+        print(f'{data_overlap.shape[0]} overlaps.')
+
+        data_overlap = data_overlap.rename(columns={str(group_column + '_left'): group_column})
+        data_overlap = data_overlap[[group_column,'geometry']]
+        
+        overlap_list = data_overlap[group_column].unique()
+        data_overlap = data[data[group_column].isin(overlap_list)]
+        
+        all_intersections = [a.intersection(b) for a, b in list(itertools.combinations(data_overlap['geometry'], 2))]
+        data_overlap = pd.concat([data_overlap['geometry'], gpd.GeoSeries(all_intersections).set_crs(4326)])
+        data_overlap = list(shapely.ops.polygonize(data_overlap.boundary.unary_union))
+        data_overlap = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(data_overlap)}).set_crs(4326).reset_index(drop=True)  
+        data_overlap['geometry'] = data_overlap['geometry'].make_valid()
+        data_overlap = data_overlap.assign(overlap_id = data_overlap.index.astype(int))
+        
+        data_overlay = gpd.overlay(df1 = data_overlap, df2 = data, how='intersection', keep_geom_type = True, make_valid = True)
+        data_overlay = data_overlay.assign(area = round(data_overlay['geometry'].to_crs(3395).area,0))
+        data_overlay['area_rank'] = data_overlay.groupby('overlap_id')['area'].rank(method='first', ascending=False)
+        data_overlay = data_overlay[data_overlay[group_column].notnull()]
+        data_overlay = data_overlay[data_overlay['area_rank'] == 1]
+        data_overlay = data_overlay[column_list_id]
+        
+        data_sjoin = data_overlap[~data_overlap['overlap_id'].isin(data_overlay['overlap_id'].unique())]
+        data_sjoin = gpd.sjoin_nearest(left_df = data_sjoin.to_crs(3395), right_df = data.to_crs(3395), how = 'left').to_crs(4326)
+        data_sjoin = data_sjoin.drop_duplicates(subset=['overlap_id'], keep='first')
+        data_sjoin = data_sjoin[column_list_id]
+        
+        data_corrected = pd.concat([data_overlay, data_sjoin], ignore_index=True)
+        data_corrected = pd.merge(left = data_overlap, right = data_corrected, how='left', on='overlap_id')
+        data_corrected = pd.concat([data_corrected[column_list], data[~data[group_column].isin(overlap_list)]])
+        
+        data_corrected['geometry'] = data_corrected['geometry'].make_valid()
+        data_corrected = data_corrected.dissolve(by=column_list_no_geo, as_index=False)
+        data_corrected['geometry'] = data_corrected['geometry'].make_valid()
+        
+        check = dask_geopandas.from_geopandas(data_corrected, npartitions = partition_count)
+        check = dask_geopandas.sjoin(left = check, right = check, predicate="overlaps")
+        check = check.compute()
+        if check.shape[0] > 0: 
+            warnings.warn(f'Unable to remove all overlaps. {check.shape[0]} overlaps remain.')
+        else:
+            print('All overlaps resolved.')
+    else:
+        print('No overlaps found.')
+        data_corrected = data
+
+    return data_corrected 
+
 def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, gpd.GeoDataFrame], gadm_column: str, gadm_code: str) -> gpd.GeoDataFrame:
     """
     For a given district level GADM in a country, this 
@@ -108,19 +180,13 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
     gadm_blocks = gpd.GeoDataFrame.from_dict({"country_code": gadm_code[0:3],"gadm_code": gadm_code,'geometry': pygeos.to_shapely(polys)}).set_crs(4326)  
     gadm_blocks = gadm_blocks.reset_index(drop=True)
 
-    within_overlaps = gpd.sjoin(left_df = gadm_blocks, right_df = gadm_blocks, predicate='within', how='inner')
-    if within_overlaps.shape[0] != gadm_blocks.shape[0]:
-        print('Overlapping polygons.')
-        all_intersections = [a.intersection(b) for a, b in list(itertools.combinations(gadm_blocks['geometry'], 2))]
-        polys_all = pd.concat([gadm_blocks['geometry'], gpd.GeoSeries(all_intersections).set_crs(4326)])
-        polys = list(shapely.ops.polygonize(polys_all.boundary.unary_union))
-        gadm_blocks = gpd.GeoDataFrame.from_dict({"country_code": gadm_code[0:3],"gadm_code": gadm_code,'geometry': gpd.GeoSeries(polys)}).set_crs(4326).reset_index(drop=True)  
+    gadm_blocks = remove_overlaps(data = gadm_blocks, group_column = 'gadm_code')
 
     gadm_blocks = gpd.overlay(df1 = gadm_blocks, df2 = gadm_data[['geometry']], how='intersection', keep_geom_type = True, make_valid = True)
     gadm_blocks['geometry'] = gadm_blocks['geometry'].make_valid()
     gadm_blocks = gadm_blocks.explode(index_parts=False)
     gadm_blocks = gadm_blocks[gadm_blocks.geom_type == "Polygon"]
-    gadm_blocks = gadm_blocks[round(gadm_blocks['geometry'].to_crs(3395).area,2) > 0]
+    gadm_blocks = gadm_blocks[round(gadm_blocks['geometry'].to_crs(3395).area,0) > 0]
 
     gadm_blocks = gadm_blocks.assign(block_id = [gadm_code + '_' + str(x) for x in list(gadm_blocks.index)])
     
@@ -149,6 +215,10 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
     # Make directories
     block_dir =  str(output_dir) + '/blocks'
     Path(block_dir).mkdir(parents=True, exist_ok=True)
+
+    block_gpkg_dir =  str(output_dir) + '/blocks/gpkg'
+    Path(block_gpkg_dir).mkdir(parents=True, exist_ok=True)
+
     street_dir =  str(output_dir) + '/streets'
     Path(street_dir).mkdir(parents=True, exist_ok=True)
 
@@ -205,9 +275,10 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         osm_streets.to_parquet(Path(street_dir) / f'streets_{country_code}.parquet', compression='snappy')
         del osm_gpd
         
+        # GADM list
         gadm_list = list(gadm_gpd['gadm_code'].unique())
         
-        # Initialize
+        # Initialize GeoDataFrame
         block_bulk = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'block_geohash': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
 
         # Build blocks for each GADM
@@ -218,22 +289,25 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         t1 = time.time()
         logging.info(f"build_blocks() finished: {block_bulk.shape}, {mem_profile()}, {str(round(t1-t0,3)/60)} minutes")
         
+        # Final check for overlaps
+        if math.ceil(block_bulk.shape[0]/5000) > 10:
+            num_partitions = math.ceil(block_bulk.shape[0]/5000)
+        else: 
+            num_partitions = 10
+        gadm_blocks = remove_overlaps(data = gadm_blocks, group_column = 'gadm_code', partition_count = num_partitions)
+
         # Write block geometries
         block_bulk.to_parquet(Path(block_dir) / f'blocks_{country_code}.parquet', compression='snappy')
+        block_bulk.to_file(Path(block_gpkg_dir) / f'blocks_{country_code}.gpkg', driver="GPKG")
         logging.info(f"Finished {country_code}.")
 
-        # Final check for overlaps
-        num_partitions = math.ceil(block_bulk.shape[0]/50000)
-        block_bulk_check = dask_geopandas.from_geopandas(block_bulk, npartitions = num_partitions)
-        block_bulk_check = dask_geopandas.sjoin(left = block_bulk_check, right = block_bulk_check, predicate="within")
-        block_bulk_check = block_bulk_check.compute()
-        block_bulk_check_list = block_bulk_check[block_bulk_check['block_id_left'] != block_bulk_check['block_id_right']]
-        if block_bulk_check_list.shape[0] > 0:
-            block_bulk_check_list = block_bulk_check_list[['block_id_left','block_id_right']].drop_duplicates().reset_index(drop = True).groupby('block_id_left')['block_id_right'].apply(list).to_dict()
-            logging.info(f"Overlaying geometries: {block_bulk_check_list}")
-            assert block_bulk.shape[0] == block_bulk_check.shape[0], "Overlays: Not same number of rows."
-            assert block_bulk_check[block_bulk_check['block_id_left'] == block_bulk_check['block_id_right']].shape[0], 'Overlays: Not identical sjoin.'
-            
+        # Check for overlaps
+        check = dask_geopandas.from_geopandas(block_bulk, npartitions = num_partitions)
+        check = dask_geopandas.sjoin(left = check, right = check, predicate="overlaps")
+        check = check.compute()
+        if check.shape[0] > 0: 
+            logging.info(f"Number of overlaps: {check[0].shape}")
+
     logging.info(f"Finished.")
 
 def setup(args=None):    
