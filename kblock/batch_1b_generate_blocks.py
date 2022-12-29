@@ -180,14 +180,14 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
     gadm_blocks = gpd.GeoDataFrame.from_dict({"country_code": gadm_code[0:3],"gadm_code": gadm_code,'geometry': pygeos.to_shapely(polys)}).set_crs(4326)  
     gadm_blocks = gadm_blocks.reset_index(drop=True)
 
-    gadm_blocks = remove_overlaps(data = gadm_blocks, group_column = 'gadm_code')
-
     gadm_blocks = gpd.overlay(df1 = gadm_blocks, df2 = gadm_data[['geometry']], how='intersection', keep_geom_type = True, make_valid = True)
     gadm_blocks['geometry'] = gadm_blocks['geometry'].make_valid()
     gadm_blocks = gadm_blocks.explode(index_parts=False)
     gadm_blocks = gadm_blocks[gadm_blocks.geom_type == "Polygon"]
     gadm_blocks = gadm_blocks[round(gadm_blocks['geometry'].to_crs(3395).area,0) > 0]
 
+    gadm_blocks = gadm_blocks.assign(block_id = [gadm_code + '_' + str(x) for x in list(gadm_blocks.index)])
+    gadm_blocks = remove_overlaps(data = gadm_blocks, group_column = 'block_id')
     gadm_blocks = gadm_blocks.assign(block_id = [gadm_code + '_' + str(x) for x in list(gadm_blocks.index)])
     
     with warnings.catch_warnings():
@@ -294,7 +294,7 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
             num_partitions = math.ceil(block_bulk.shape[0]/5000)
         else: 
             num_partitions = 10
-        block_bulk = remove_overlaps(data = block_bulk, group_column = 'gadm_code', partition_count = num_partitions)
+        block_bulk = remove_overlaps(data = block_bulk, group_column = 'block_id', partition_count = num_partitions)
 
         # Write block geometries
         block_bulk.to_parquet(Path(block_dir) / f'blocks_{country_code}.parquet', compression='snappy')
