@@ -294,7 +294,7 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
             num_partitions = math.ceil(block_bulk.shape[0]/5000)
         else: 
             num_partitions = 10
-        gadm_blocks = remove_overlaps(data = gadm_blocks, group_column = 'gadm_code', partition_count = num_partitions)
+        block_bulk = remove_overlaps(data = block_bulk, group_column = 'gadm_code', partition_count = num_partitions)
 
         # Write block geometries
         block_bulk.to_parquet(Path(block_dir) / f'blocks_{country_code}.parquet', compression='snappy')
