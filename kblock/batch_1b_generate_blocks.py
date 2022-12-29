@@ -185,9 +185,15 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
     gadm_blocks = gadm_blocks.explode(index_parts=False)
     gadm_blocks = gadm_blocks[gadm_blocks.geom_type == "Polygon"]
     gadm_blocks = gadm_blocks[round(gadm_blocks['geometry'].to_crs(3395).area,0) > 0]
-
     gadm_blocks = gadm_blocks.assign(block_id = [gadm_code + '_' + str(x) for x in list(gadm_blocks.index)])
-    gadm_blocks = remove_overlaps(data = gadm_blocks, group_column = 'block_id')
+    
+    if math.ceil(block_bulk.shape[0]/5000) > 10: num_partitions = math.ceil(block_bulk.shape[0]/5000)
+    else: num_partitions = 10
+    gadm_blocks = remove_overlaps(data = gadm_blocks, group_column = 'block_id', npartitions = num_partitions)
+    gadm_blocks['geometry'] = gadm_blocks['geometry'].make_valid()
+    gadm_blocks = gadm_blocks.explode(index_parts=False)
+    gadm_blocks = gadm_blocks[gadm_blocks.geom_type == "Polygon"]
+    gadm_blocks = gadm_blocks[round(gadm_blocks['geometry'].to_crs(3395).area,0) > 0]
     gadm_blocks = gadm_blocks.assign(block_id = [gadm_code + '_' + str(x) for x in list(gadm_blocks.index)])
     
     with warnings.catch_warnings():
@@ -289,11 +295,12 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         t1 = time.time()
         logging.info(f"build_blocks() finished: {block_bulk.shape}, {mem_profile()}, {str(round(t1-t0,3)/60)} minutes")
         
+        # Make valid
+        block_bulk['geometry'] = block_bulk['geometry'].make_valid()
+            
         # Final check for overlaps
-        if math.ceil(block_bulk.shape[0]/5000) > 10:
-            num_partitions = math.ceil(block_bulk.shape[0]/5000)
-        else: 
-            num_partitions = 10
+        if math.ceil(block_bulk.shape[0]/5000) > 10: num_partitions = math.ceil(block_bulk.shape[0]/5000)
+        else: num_partitions = 10
         block_bulk = remove_overlaps(data = block_bulk, group_column = 'block_id', partition_count = num_partitions)
 
         # Write block geometries
@@ -301,7 +308,7 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         block_bulk.to_file(Path(block_gpkg_dir) / f'blocks_{country_code}.gpkg', driver="GPKG")
         logging.info(f"Finished {country_code}.")
 
-        # Check for overlaps
+        # Report overlaps
         check = dask_geopandas.from_geopandas(block_bulk, npartitions = num_partitions)
         check = dask_geopandas.sjoin(left = check, right = check, predicate="overlaps")
         check = check.compute()
