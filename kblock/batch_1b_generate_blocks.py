@@ -14,6 +14,9 @@ from pathlib import Path
 import psutil
 import warnings
 import logging
+import contextlib
+import io
+import sys
 import time
 import math
 import re
@@ -82,6 +85,7 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         GeoDataFrame with all overlapping geometries removed. 
         Assigns overlapping sections to the geometry group_column with most area in common or is closest.
     """
+    assert data.crs == 'epsg:4326', "data is not epsg:4326."
     column_list = list(data.columns)
 
     column_list_no_geo = list(data.columns)
@@ -102,28 +106,34 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         data_overlap = data_overlap[[group_column,'geometry']]
         
         overlap_list = data_overlap[group_column].unique()
-        data_overlap = data[data[group_column].isin(overlap_list)]
-        
+        #data_overlap = data[data[group_column].isin(overlap_list)]
+
+        # Resolve overlaps via intersection and polygonization
         all_intersections = [a.intersection(b) for a, b in list(itertools.combinations(data_overlap['geometry'], 2))]
         data_overlap = pd.concat([data_overlap['geometry'], gpd.GeoSeries(all_intersections).set_crs(4326)])
         data_overlap = list(shapely.ops.polygonize(data_overlap.boundary.unary_union))
         data_overlap = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(data_overlap)}).set_crs(4326).reset_index(drop=True)  
         data_overlap['geometry'] = data_overlap['geometry'].make_valid()
+        data_overlap = gpd.overlay(df1 = data_overlap, df2 = data[~data[group_column].isin(overlap_list)], how = 'difference', keep_geom_type = True, make_valid = True)
         data_overlap = data_overlap.assign(overlap_id = data_overlap.index.astype(int))
         
+        # Use overlay to relabel overlaps defaulting to label with largest area
         data_overlay = gpd.overlay(df1 = data_overlap, df2 = data, how='intersection', keep_geom_type = True, make_valid = True)
         data_overlay = data_overlay.assign(area = round(data_overlay['geometry'].to_crs(3395).area,0))
         data_overlay['area_rank'] = data_overlay.groupby('overlap_id')['area'].rank(method='first', ascending=False)
         data_overlay = data_overlay[data_overlay[group_column].notnull()]
         data_overlay = data_overlay[data_overlay['area_rank'] == 1]
-        data_overlay = data_overlay[column_list_id]
+        data_corrected = data_overlay[column_list_id]
         
-        data_sjoin = data_overlap[~data_overlap['overlap_id'].isin(data_overlay['overlap_id'].unique())]
-        data_sjoin = gpd.sjoin_nearest(left_df = data_sjoin.to_crs(3395), right_df = data.to_crs(3395), how = 'left').to_crs(4326)
-        data_sjoin = data_sjoin.drop_duplicates(subset=['overlap_id'], keep='first')
-        data_sjoin = data_sjoin[column_list_id]
+        # For fragments that did not fit in overlay use sjoin_nearest (take first when more than one touches)
+        data_sjoin = data_overlap[~data_overlap['overlap_id'].isin(data_corrected['overlap_id'].unique())]
+        if data_sjoin.shape[0] > 0:
+            data_sjoin = gpd.sjoin_nearest(left_df = data_sjoin.to_crs(3395), right_df = data.to_crs(3395), how = 'left').to_crs(4326)
+            data_sjoin = data_sjoin.drop_duplicates(subset=['overlap_id'], keep='first')
+            data_sjoin = data_sjoin[column_list_id]
+            data_corrected = pd.concat([data_corrected, data_sjoin], ignore_index=True)
         
-        data_corrected = pd.concat([data_overlay, data_sjoin], ignore_index=True)
+        # Merge in labels
         data_corrected = pd.merge(left = data_overlap, right = data_corrected, how='left', on='overlap_id')
         data_corrected = pd.concat([data_corrected[column_list], data[~data[group_column].isin(overlap_list)]])
         
@@ -134,8 +144,9 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         check = dask_geopandas.from_geopandas(data_corrected, npartitions = partition_count)
         check = dask_geopandas.sjoin(left = check, right = check, predicate="overlaps")
         check = check.compute()
+
         if check.shape[0] > 0: 
-            warnings.warn(f'Unable to remove all overlaps. {check.shape[0]} overlaps remain.')
+            warnings.warn(f'Unable to resolve all overlaps. {check.shape[0]} overlaps remain.')
         else:
             print('All overlaps resolved.')
     else:
@@ -187,9 +198,9 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
     gadm_blocks = gadm_blocks[round(gadm_blocks['geometry'].to_crs(3395).area,0) > 0]
     gadm_blocks = gadm_blocks.assign(block_id = [gadm_code + '_' + str(x) for x in list(gadm_blocks.index)])
     
-    if math.ceil(block_bulk.shape[0]/5000) > 10: num_partitions = math.ceil(block_bulk.shape[0]/5000)
-    else: num_partitions = 10
-    gadm_blocks = remove_overlaps(data = gadm_blocks, group_column = 'block_id', npartitions = num_partitions)
+    if math.ceil(gadm_blocks.shape[0]/5000) > 1: num_partitions = math.ceil(gadm_blocks.shape[0]/5000)
+    else: num_partitions = 1
+    gadm_blocks = remove_overlaps(data = gadm_blocks, group_column = 'block_id', partition_count = num_partitions)
     gadm_blocks['geometry'] = gadm_blocks['geometry'].make_valid()
     gadm_blocks = gadm_blocks.explode(index_parts=False)
     gadm_blocks = gadm_blocks[gadm_blocks.geom_type == "Polygon"]
@@ -263,6 +274,7 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
 
     logging.info(f"Countries to process: {country_list}")
     logging.info(f"Generate block geometries")
+    logging.info(f'-------------')
 
     # Iterate through country codes
     for country_code in country_list: 
@@ -296,27 +308,41 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         output_map = list(map(lambda x: build_blocks(gadm_data = gadm_gpd, osm_data = osm_pygeos, gadm_column = 'gadm_code', gadm_code = x), gadm_list))
         for i,j in enumerate(output_map): block_bulk = pd.concat([block_bulk, output_map[i]], ignore_index=True)
         t1 = time.time()
-        logging.info(f"build_blocks() finished: {block_bulk.shape}, {mem_profile()}, {str(round(t1-t0,3)/60)} minutes")
+        logging.info(f"Blocking succeeded: {block_bulk.shape}, {mem_profile()}, {round((t1-t0)/60,2)} minutes")
         
-        # Make valid
+        # Make valid and perform a final overlap correction
         block_bulk['geometry'] = block_bulk['geometry'].make_valid()
-        
-        # Report overlaps
-        if math.ceil(block_bulk.shape[0]/5000) > 10: num_partitions = math.ceil(block_bulk.shape[0]/5000)
-        else: num_partitions = 10
+        if math.ceil(block_bulk.shape[0]/5000) > 1: num_partitions = math.ceil(block_bulk.shape[0]/5000)
+        else: num_partitions = 1
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            block_bulk = remove_overlaps(data = block_bulk, group_column = 'block_id', partition_count = num_partitions)
+            overlap_log = f.getvalue().replace('\n', ' ')
+            logging.info(f'Overlap correction: {overlap_log}')
+
+        # Check area of input and output geometries
+        input_area = round(sum(gadm_gpd.to_crs(3395).area)*1e-6,2)
+        output_area = round(sum(block_bulk.to_crs(3395).area)*1e-6,2)
+        logging.info(f'Input area: {input_area} km2')
+        logging.info(f'Output area: {output_area} km2')
+        logging.info(f'Difference: {round((output_area - input_area),2)} km2')
+
+        # Report overlaps if they exist
         check = dask_geopandas.from_geopandas(block_bulk, npartitions = num_partitions)
         check = dask_geopandas.sjoin(left = check, right = check, predicate="overlaps")
         check = check.compute()
         if check.shape[0] > 0: 
-            logging.info(f"Number of overlaps: {check[0].shape}")
+            print(check.shape[0])
+            logging.info(f'Number of unresolvable countrywide overlaps: {check.shape[0]}')
             check.to_file(Path(block_overlaps_dir) / f'blocks_overlaps_{country_code}.gpkg', driver="GPKG")
 
         # Write block geometries
         block_bulk.to_parquet(Path(block_dir) / f'blocks_{country_code}.parquet', compression='snappy')
         block_bulk.to_file(Path(block_gpkg_dir) / f'blocks_{country_code}.gpkg', driver="GPKG")
         logging.info(f"Finished {country_code}.")
+        logging.info(f'-------------')
 
-    logging.info(f"Finished.")
+    logging.info(f"Finished job.")
 
 def setup(args=None):    
     parser = argparse.ArgumentParser(description='Build blocks geometries.')

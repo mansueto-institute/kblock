@@ -3,7 +3,9 @@
 
 #iso_list=(SLE GIN LBR DJI)
 
-iso_list=(DJI CPV COM STP SYC)
+# iso_list=(DJI CPV COM STP SYC)
+
+iso_list=(SYC DJI)
 
 working_directory=/Users/nm/Downloads/update
 
