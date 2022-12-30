@@ -49,6 +49,7 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
 
     if data_overlap.shape[0] > 0: 
         print(f'{data_overlap.shape[0]} overlaps.')
+        logging.info(f'{data_overlap.shape[0]} overlaps.')
 
         data_overlap = data_overlap.rename(columns={str(group_column + '_left'): group_column})
         data_overlap = data_overlap[[group_column,'geometry']]
@@ -95,11 +96,15 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         check = check.compute()
 
         if check.shape[0] > 0: 
-            warnings.warn(f'Unable to resolve all overlaps. {check.shape[0]} overlaps remain.')
+            print(f'Unable to resolve all overlaps. {check.shape[0]} overlaps remain.')
+            logging.warnings(f'Unable to resolve all overlaps. {check.shape[0]} overlaps remain.')
         else:
             print('All overlaps resolved.')
+            logging.info('All overlaps resolved.')
     else:
         print('No overlaps found.')
+        logging.info('No overlaps found.')
+
         data_corrected = data
 
     return data_corrected 
@@ -107,10 +112,12 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
 
 def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path, osm_dir: Path, output_dir: Path):
 
-    logging.getLogger().setLevel(logging.INFO)
+    # logging.getLogger().setLevel(logging.INFO)
     logging.basicConfig(filename=Path(log_file), format='%(asctime)s:%(message)s: ', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
 
     print('Starting.')
+    logging.info(f"------------")
+    logging.info(f"------------")
     
     # Make directory
     gadm_output_dir = str(output_dir) + '/parquet'
@@ -255,13 +262,18 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
             gadm_country = gadm_country.dissolve(by='gadm_code', as_index=False)
             gadm_country['geometry'] = gadm_country['geometry'].make_valid()
 
-        # Remove overlapping geometries
-        f = io.StringIO()
-        with contextlib.redirect_stdout(f):
-            gadm_country = remove_overlaps(data = gadm_country, group_column = 'gadm_code')
-            overlap_log = f.getvalue().replace('\n', ' ')
-            logging.info(f'Overlap correction: {overlap_log}')
-
+        # # Remove overlapping geometries
+        # logging.info(f'Overlap correction.')
+        # f = io.StringIO()
+        # with contextlib.redirect_stdout(f):
+        #     tr0 = time.time()
+        #     gadm_country = remove_overlaps(data = gadm_country, group_column = 'gadm_code')
+        #     tr1 = time.time()
+        #     overlap_log = f.getvalue().replace('\n', ' ')
+        #     f.close()
+        #     logging.info(f'{overlap_log}  {round((tr1-tr0)/60,3)} minutes')
+        gadm_country = remove_overlaps(data = gadm_country, group_column = 'gadm_code')
+            
         # Write countries
         gadm_country.to_parquet(Path(gadm_output_dir) / f'gadm_{country_code}.parquet', compression='snappy')
         gadm_country.to_file(Path(gpkg_dir) / f'gadm_{country_code}.gpkg', driver="GPKG")
@@ -279,6 +291,7 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
         logging.info(f"------------")
 
     # Consolidate GADM data into one file
+    logging.info(f"Consolidating countries.")
     gadm_output_list = list(filter(re.compile("gadm_").match, sorted(list(os.listdir(Path(gadm_output_dir))))))
     gadm_output_list = [(re.sub('gadm_', '', re.sub('.parquet', '', i))) for i in gadm_output_list] 
     gadm_combo = gpd.GeoDataFrame({'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
@@ -286,13 +299,18 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
         gadm_clean = gpd.read_parquet(Path(gadm_output_dir) / f'gadm_{country_code}.parquet')
         gadm_combo = pd.concat([gadm_combo, gadm_clean], ignore_index=True)   
 
-    # Run an all-country overlap correction
-    logging.info(f'Correcting all-country overlaps.')
-    f = io.StringIO()
-    with contextlib.redirect_stdout(f):
-        gadm_combo = remove_overlaps(data = gadm_combo, group_column = 'gadm_code', partition_count = 20) 
-        overlap_log = f.getvalue().replace('\n', ' ')
-        logging.info(f'Continent-scale overlap correction: {overlap_log}')
+    # # Run an all-country overlap correction
+    # logging.info(f'Correcting all-country overlaps.')
+    # f = io.StringIO()
+    # with contextlib.redirect_stdout(f):
+    #     t0 = time.time()
+    #     gadm_combo = remove_overlaps(data = gadm_combo, group_column = 'gadm_code', partition_count = 20) 
+    #     t1 = time.time()
+    #     overlap_log = f.getvalue().replace('\n', ' ')
+    #     f.close()
+    #     logging.info(f'Continent-scale overlap correction: {overlap_log}  {round((t1-t0)/60,3)} minutes')
+    gadm_combo = remove_overlaps(data = gadm_combo, group_column = 'gadm_code', partition_count = 20) 
+
 
     # Write the all-country file 
     logging.info(f'Writing all-country files.')
@@ -300,14 +318,15 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
     gadm_combo.to_file(Path(combined_dir) / f'all_gadm.gpkg', driver="GPKG")
 
     # Re-write country files after all-country overlap correction
-    logging.info(f'Re-writing country files:')
+    logging.info(f'Re-writing individual country files:')
     for country_code in gadm_output_list: 
         logging.info(f'{country_code}')
         gadm_country = gadm_combo[gadm_combo['country_code'] == country_code]
         gadm_country.to_parquet(Path(gadm_output_dir) / f'gadm_{country_code}.parquet', compression='snappy')
         gadm_country.to_file(Path(gpkg_dir) / f'gadm_{country_code}.gpkg', driver="GPKG")
 
-    logging.info(f"Finished")
+    logging.info(f"Finished job.")
+    logging.info(f"------------")
 
 def setup(args=None):
     parser = argparse.ArgumentParser(description='Clean up and combine GADM delineations.')
