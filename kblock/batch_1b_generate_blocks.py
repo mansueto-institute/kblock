@@ -101,6 +101,7 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
 
     if data_overlap.shape[0] > 0: 
         print(f'{data_overlap.shape[0]} overlaps.')
+        logging.info(f'{data_overlap.shape[0]} overlaps.')
 
         data_overlap = data_overlap.rename(columns={str(group_column + '_left'): group_column})
         data_overlap = data_overlap[[group_column,'geometry']]
@@ -147,11 +148,15 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         check = check.compute()
 
         if check.shape[0] > 0: 
-            warnings.warn(f'Unable to resolve all overlaps. {check.shape[0]} overlaps remain.')
+            print(f'Unable to resolve all overlaps. {check.shape[0]} overlaps remain.')
+            logging.warnings(f'Unable to resolve all overlaps. {check.shape[0]} overlaps remain.')
         else:
             print('All overlaps resolved.')
+            logging.info('All overlaps resolved.')
     else:
         print('No overlaps found.')
+        logging.info('No overlaps found.')
+
         data_corrected = data
 
     return data_corrected 
@@ -227,7 +232,7 @@ def mem_profile() -> str:
 
 def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, output_dir: Path):
     
-    logging.getLogger().setLevel(logging.INFO)
+    #logging.getLogger().setLevel(logging.INFO)
     logging.basicConfig(filename=Path(log_file), format='%(asctime)s:%(message)s: ', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
 
     # Make directories
@@ -259,6 +264,9 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
     in_chunk_not_in_gadm_inputs = [x for x in country_chunk if x not in set(gadm_inputs_list)]
     if len(in_chunk_not_in_gadm_inputs) > 0:
         raise ValueError(f'GADM input data does not exist for {in_chunk_not_in_gadm_inputs} in country_chunk argument.')
+
+    logging.info(f"------------")
+    logging.info(f"------------")
 
     # Check for completed countries in output directory
     output_file_list = list(filter(re.compile("blocks_").match, sorted(list(os.listdir(Path(block_dir))))))
