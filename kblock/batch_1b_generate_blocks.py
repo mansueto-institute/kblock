@@ -198,7 +198,7 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
     gadm_blocks = gadm_blocks[round(gadm_blocks['geometry'].to_crs(3395).area,0) > 0]
     gadm_blocks = gadm_blocks.assign(block_id = [gadm_code + '_' + str(x) for x in list(gadm_blocks.index)])
     
-    if math.ceil(gadm_blocks.shape[0]/5000) > 1: num_partitions = math.ceil(gadm_blocks.shape[0]/5000)
+    if math.ceil(gadm_blocks.shape[0]/10000) > 1: num_partitions = math.ceil(gadm_blocks.shape[0]/10000)
     else: num_partitions = 1
     gadm_blocks = remove_overlaps(data = gadm_blocks, group_column = 'block_id', partition_count = num_partitions)
     gadm_blocks['geometry'] = gadm_blocks['geometry'].make_valid()
@@ -321,9 +321,9 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         logging.info(f'Difference: {round((output_area - input_area),2)} km2')
         logging.info(f'Pct diff: {(output_area - input_area) / input_area}')
 
-        # Perform a final overlap correction (if the output area is hundredth of a percent larger than input)
-        if ((output_area - input_area) / input_area) > 0.0001:
-            if math.ceil(block_bulk.shape[0]/5000) > 1: num_partitions = math.ceil(block_bulk.shape[0]/5000)
+        # Perform a final overlap correction 
+        if (((output_area - input_area) / input_area) > 0.001) or ((output_area - input_area) > 1):
+            if math.ceil(block_bulk.shape[0]/10000) > 1: num_partitions = math.ceil(block_bulk.shape[0]/10000)
             else: num_partitions = 1
             f = io.StringIO()
             with contextlib.redirect_stdout(f):
@@ -340,13 +340,13 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
             logging.info(f'Pct diff: {(output_area - input_area) / input_area}')
 
             # Report overlaps if they exist
-            check = dask_geopandas.from_geopandas(block_bulk, npartitions = num_partitions)
-            check = dask_geopandas.sjoin(left = check, right = check, predicate="overlaps")
-            check = check.compute()
-            if check.shape[0] > 0: 
-                print(check.shape[0])
-                logging.info(f'Number of unresolvable countrywide overlaps: {check.shape[0]}')
-                check.to_file(Path(block_overlaps_dir) / f'blocks_overlaps_{country_code}.gpkg', driver="GPKG")
+            # check = dask_geopandas.from_geopandas(block_bulk, npartitions = num_partitions)
+            # check = dask_geopandas.sjoin(left = check, right = check, predicate="overlaps")
+            # check = check.compute()
+            # if check.shape[0] > 0: 
+            #     print(check.shape[0])
+            #     logging.info(f'Number of unresolvable countrywide overlaps: {check.shape[0]}')
+            #     check.to_file(Path(block_overlaps_dir) / f'blocks_overlaps_{country_code}.gpkg', driver="GPKG")
 
         # Write block geometries
         block_bulk.to_parquet(Path(block_dir) / f'blocks_{country_code}.parquet', compression='snappy')
