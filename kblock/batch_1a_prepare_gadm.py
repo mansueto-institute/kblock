@@ -256,11 +256,10 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
             gadm_country['geometry'] = gadm_country['geometry'].make_valid()
 
         # Remove overlapping geometries
-        logging.info(f'Correcting country overlaps.')
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
-            overlap_log = f.getvalue().replace('\n', ' ')
             gadm_country = remove_overlaps(data = gadm_country, group_column = 'gadm_code')
+            overlap_log = f.getvalue().replace('\n', ' ')
             logging.info(f'Overlap correction: {overlap_log}')
 
         # Write countries
@@ -291,8 +290,8 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
     logging.info(f'Correcting all-country overlaps.')
     f = io.StringIO()
     with contextlib.redirect_stdout(f):
-        overlap_log = f.getvalue().replace('\n', ' ')
         gadm_combo = remove_overlaps(data = gadm_combo, group_column = 'gadm_code', partition_count = 20) 
+        overlap_log = f.getvalue().replace('\n', ' ')
         logging.info(f'Continent-scale overlap correction: {overlap_log}')
 
     # Write the all-country file 
@@ -302,7 +301,7 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
 
     # Re-write country files after all-country overlap correction
     logging.info(f'Re-writing country files:')
-    for country_code in country_list: 
+    for country_code in gadm_output_list: 
         logging.info(f'{country_code}')
         gadm_country = gadm_combo[gadm_combo['country_code'] == country_code]
         gadm_country.to_parquet(Path(gadm_output_dir) / f'gadm_{country_code}.parquet', compression='snappy')
