@@ -125,13 +125,14 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         data_overlay = data_overlay[data_overlay['area_rank'] == 1]
         data_corrected = data_overlay[column_list_id]
         
-        # For fragments that did not fit in overlay use sjoin_nearest (take first when more than one touches)
-        data_sjoin = data_overlap[~data_overlap['overlap_id'].isin(data_corrected['overlap_id'].unique())]
-        if data_sjoin.shape[0] > 0:
-            data_sjoin = gpd.sjoin_nearest(left_df = data_sjoin.to_crs(3395), right_df = data.to_crs(3395), how = 'left').to_crs(4326)
-            data_sjoin = data_sjoin.drop_duplicates(subset=['overlap_id'], keep='first')
-            data_sjoin = data_sjoin[column_list_id]
-            data_corrected = pd.concat([data_corrected, data_sjoin], ignore_index=True)
+        # # For fragments that did not fit in overlay use sjoin_nearest (take first when more than one touches) 
+        # # Commented off b/c these areas are negligible and may contain interior water features that were polygonized
+        # data_sjoin = data_overlap[~data_overlap['overlap_id'].isin(data_corrected['overlap_id'].unique())]
+        # if data_sjoin.shape[0] > 0:
+        #     data_sjoin = gpd.sjoin_nearest(left_df = data_sjoin.to_crs(3395), right_df = data.to_crs(3395), how = 'left').to_crs(4326)
+        #     data_sjoin = data_sjoin.drop_duplicates(subset=['overlap_id'], keep='first')
+        #     data_sjoin = data_sjoin[column_list_id]
+        #     data_corrected = pd.concat([data_corrected, data_sjoin], ignore_index=True)
         
         # Merge in labels
         data_corrected = pd.merge(left = data_overlap, right = data_corrected, how='left', on='overlap_id')
@@ -321,25 +322,25 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         logging.info(f'Difference: {round((output_area - input_area),2)} km2')
         logging.info(f'Pct diff: {(output_area - input_area) / input_area}')
 
-        # Perform a final overlap correction 
-        if (((output_area - input_area) / input_area) > 0.001) or ((output_area - input_area) > 1):
-            if math.ceil(block_bulk.shape[0]/10000) > 1: num_partitions = math.ceil(block_bulk.shape[0]/10000)
-            else: num_partitions = 1
-            f = io.StringIO()
-            with contextlib.redirect_stdout(f):
-                block_bulk = remove_overlaps(data = block_bulk, group_column = 'block_id', partition_count = num_partitions)
-                overlap_log = f.getvalue().replace('\n', ' ')
-                logging.info(f'Overlap correction: {overlap_log}')
+        # # Perform a final overlap correction 
+        # if (((output_area - input_area) / input_area) > 0.001) or ((output_area - input_area) > 1):
+        #     if math.ceil(block_bulk.shape[0]/10000) > 1: num_partitions = math.ceil(block_bulk.shape[0]/10000)
+        #     else: num_partitions = 1
+        #     f = io.StringIO()
+        #     with contextlib.redirect_stdout(f):
+        #         block_bulk = remove_overlaps(data = block_bulk, group_column = 'block_id', partition_count = num_partitions)
+        #         overlap_log = f.getvalue().replace('\n', ' ')
+        #         logging.info(f'Overlap correction: {overlap_log}')
 
-            # Check area of input and output geometries
-            input_area = round(sum(gadm_gpd.to_crs(3395).area)*1e-6,2)
-            output_area = round(sum(block_bulk.to_crs(3395).area)*1e-6,2)
-            logging.info(f'Input area: {input_area} km2')
-            logging.info(f'Output area: {output_area} km2')
-            logging.info(f'Difference: {round((output_area - input_area),2)} km2')
-            logging.info(f'Pct diff: {(output_area - input_area) / input_area}')
+            # # Check area of input and output geometries
+            # input_area = round(sum(gadm_gpd.to_crs(3395).area)*1e-6,2)
+            # output_area = round(sum(block_bulk.to_crs(3395).area)*1e-6,2)
+            # logging.info(f'Input area: {input_area} km2')
+            # logging.info(f'Output area: {output_area} km2')
+            # logging.info(f'Difference: {round((output_area - input_area),2)} km2')
+            # logging.info(f'Pct diff: {(output_area - input_area) / input_area}')
 
-            # Report overlaps if they exist
+            # # Report overlaps if they exist
             # check = dask_geopandas.from_geopandas(block_bulk, npartitions = num_partitions)
             # check = dask_geopandas.sjoin(left = check, right = check, predicate="overlaps")
             # check = check.compute()
