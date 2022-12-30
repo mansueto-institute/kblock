@@ -309,16 +309,9 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         for i,j in enumerate(output_map): block_bulk = pd.concat([block_bulk, output_map[i]], ignore_index=True)
         t1 = time.time()
         logging.info(f"Blocking succeeded: {block_bulk.shape}, {mem_profile()}, {round((t1-t0)/60,2)} minutes")
-        
-        # Make valid and perform a final overlap correction
+
+        # Make valid 
         block_bulk['geometry'] = block_bulk['geometry'].make_valid()
-        if math.ceil(block_bulk.shape[0]/5000) > 1: num_partitions = math.ceil(block_bulk.shape[0]/5000)
-        else: num_partitions = 1
-        f = io.StringIO()
-        with contextlib.redirect_stdout(f):
-            block_bulk = remove_overlaps(data = block_bulk, group_column = 'block_id', partition_count = num_partitions)
-            overlap_log = f.getvalue().replace('\n', ' ')
-            logging.info(f'Overlap correction: {overlap_log}')
 
         # Check area of input and output geometries
         input_area = round(sum(gadm_gpd.to_crs(3395).area)*1e-6,2)
@@ -326,15 +319,34 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         logging.info(f'Input area: {input_area} km2')
         logging.info(f'Output area: {output_area} km2')
         logging.info(f'Difference: {round((output_area - input_area),2)} km2')
+        logging.info(f'Pct diff: {(output_area - input_area) / input_area}')
 
-        # Report overlaps if they exist
-        check = dask_geopandas.from_geopandas(block_bulk, npartitions = num_partitions)
-        check = dask_geopandas.sjoin(left = check, right = check, predicate="overlaps")
-        check = check.compute()
-        if check.shape[0] > 0: 
-            print(check.shape[0])
-            logging.info(f'Number of unresolvable countrywide overlaps: {check.shape[0]}')
-            check.to_file(Path(block_overlaps_dir) / f'blocks_overlaps_{country_code}.gpkg', driver="GPKG")
+        # Perform a final overlap correction (if the output area is hundredth of a percent larger than input)
+        if ((output_area - input_area) / input_area) > 0.0001:
+            if math.ceil(block_bulk.shape[0]/5000) > 1: num_partitions = math.ceil(block_bulk.shape[0]/5000)
+            else: num_partitions = 1
+            f = io.StringIO()
+            with contextlib.redirect_stdout(f):
+                block_bulk = remove_overlaps(data = block_bulk, group_column = 'block_id', partition_count = num_partitions)
+                overlap_log = f.getvalue().replace('\n', ' ')
+                logging.info(f'Overlap correction: {overlap_log}')
+
+            # Check area of input and output geometries
+            input_area = round(sum(gadm_gpd.to_crs(3395).area)*1e-6,2)
+            output_area = round(sum(block_bulk.to_crs(3395).area)*1e-6,2)
+            logging.info(f'Input area: {input_area} km2')
+            logging.info(f'Output area: {output_area} km2')
+            logging.info(f'Difference: {round((output_area - input_area),2)} km2')
+            logging.info(f'Pct diff: {(output_area - input_area) / input_area}')
+
+            # Report overlaps if they exist
+            check = dask_geopandas.from_geopandas(block_bulk, npartitions = num_partitions)
+            check = dask_geopandas.sjoin(left = check, right = check, predicate="overlaps")
+            check = check.compute()
+            if check.shape[0] > 0: 
+                print(check.shape[0])
+                logging.info(f'Number of unresolvable countrywide overlaps: {check.shape[0]}')
+                check.to_file(Path(block_overlaps_dir) / f'blocks_overlaps_{country_code}.gpkg', driver="GPKG")
 
         # Write block geometries
         block_bulk.to_parquet(Path(block_dir) / f'blocks_{country_code}.parquet', compression='snappy')
