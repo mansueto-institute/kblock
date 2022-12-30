@@ -14,11 +14,14 @@ import re
 import time
 import argparse
 import logging
+import io
+import contextlib
 import math
 import dask_geopandas
 np.set_printoptions(suppress=True)
 warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*')
 warnings.filterwarnings('ignore', message='.*dropped geometries of different geometry types than.*')
+warnings.filterwarnings('ignore', message='.ShapelyDeprecationWarning*') 
 
 def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: int = 10) -> gpd.GeoDataFrame:
     """ 
@@ -70,13 +73,14 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         data_overlay = data_overlay[data_overlay['area_rank'] == 1]
         data_corrected = data_overlay[column_list_id]
         
-        # For fragments that did not fit in overlay use sjoin_nearest (take first when more than one touches)
-        data_sjoin = data_overlap[~data_overlap['overlap_id'].isin(data_corrected['overlap_id'].unique())]
-        if data_sjoin.shape[0] > 0:
-            data_sjoin = gpd.sjoin_nearest(left_df = data_sjoin.to_crs(3395), right_df = data.to_crs(3395), how = 'left').to_crs(4326)
-            data_sjoin = data_sjoin.drop_duplicates(subset=['overlap_id'], keep='first')
-            data_sjoin = data_sjoin[column_list_id]
-            data_corrected = pd.concat([data_corrected, data_sjoin], ignore_index=True)
+        # # For fragments that did not fit in overlay use sjoin_nearest (take first when more than one touches) 
+        # # Commented off b/c these areas are negligible and may contain interior water features that were polygonized
+        # data_sjoin = data_overlap[~data_overlap['overlap_id'].isin(data_corrected['overlap_id'].unique())]
+        # if data_sjoin.shape[0] > 0:
+        #     data_sjoin = gpd.sjoin_nearest(left_df = data_sjoin.to_crs(3395), right_df = data.to_crs(3395), how = 'left').to_crs(4326)
+        #     data_sjoin = data_sjoin.drop_duplicates(subset=['overlap_id'], keep='first')
+        #     data_sjoin = data_sjoin[column_list_id]
+        #     data_corrected = pd.concat([data_corrected, data_sjoin], ignore_index=True)
         
         # Merge in labels
         data_corrected = pd.merge(left = data_overlap, right = data_corrected, how='left', on='overlap_id')
@@ -100,10 +104,13 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
 
     return data_corrected 
 
+
 def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path, osm_dir: Path, output_dir: Path):
 
     logging.getLogger().setLevel(logging.INFO)
     logging.basicConfig(filename=Path(log_file), format='%(asctime)s:%(message)s: ', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
+
+    print('Starting.')
     
     # Make directory
     gadm_output_dir = str(output_dir) + '/parquet'
@@ -112,8 +119,8 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
     gpkg_dir = str(output_dir) + '/gpkg'
     Path(gpkg_dir).mkdir(parents=True, exist_ok=True)
 
-    overlaps_dir = str(output_dir) + '/overlaps'
-    Path(overlaps_dir).mkdir(parents=True, exist_ok=True)
+    # overlaps_dir = str(output_dir) + '/overlaps'
+    # Path(overlaps_dir).mkdir(parents=True, exist_ok=True)
 
     combined_dir = str(output_dir) + '/combined'
     Path(combined_dir).mkdir(parents=True, exist_ok=True)
@@ -155,6 +162,7 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
 
     daylight_inland_land = daylight_inland_land.to_crs(4326)
     daylight_coastal_water = daylight_coastal_water.to_crs(4326)
+    logging.info(f"------------")
 
     # Iterate through country codes
     for country_code in country_list: 
@@ -188,7 +196,10 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
 
             if all(pygeos.is_empty(land_buffer)) == False:
 
-                land_buffer = pygeos.to_shapely(pygeos.get_parts(land_buffer[~pygeos.is_empty(land_buffer)]))
+                land_buffer = land_buffer[~pygeos.is_empty(land_buffer)]
+                land_buffer = pygeos.get_parts(land_buffer)
+                land_buffer = pygeos.to_shapely(land_buffer)
+
                 coast_fixes = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(land_buffer).set_crs(3395).to_crs(4326)}).set_crs(4326)
                 coast_fixes = coast_fixes.explode(index_parts=False)
                 coast_fixes = coast_fixes[coast_fixes.geom_type == "Polygon"]
@@ -236,11 +247,6 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
                     raise TypeError(f"{country_code}: GADM column contains null.")
                 gadm_country['geometry'] = gadm_country['geometry'].make_valid()
 
-        # Ensure no overlaps with surrounding countries
-        # other_countries = all_gadm_gpd[~all_gadm_gpd['GID_0'].isin([country_code])].to_crs(4326)
-        # gadm_country = gpd.overlay(df1 = gadm_country, df2 = other_countries, how = 'difference', keep_geom_type = True, make_valid = True)
-        # gadm_country['geometry'] = gadm_country['geometry'].make_valid()
-
         # Remove non-polygons from GeometryCollection GADMs
         if not all(x in ['Polygon','MultiPolygon'] for x in gadm_country['geometry'].geom_type.unique()):
             gadm_country = gadm_country.explode(index_parts=False)
@@ -250,22 +256,28 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
             gadm_country['geometry'] = gadm_country['geometry'].make_valid()
 
         # Remove overlapping geometries
-        gadm_country = remove_overlaps(data = gadm_country, group_column = 'gadm_code')
+        logging.info(f'Correcting country overlaps.')
+        f = io.StringIO()
+        with contextlib.redirect_stdout(f):
+            overlap_log = f.getvalue().replace('\n', ' ')
+            gadm_country = remove_overlaps(data = gadm_country, group_column = 'gadm_code')
+            logging.info(f'Overlap correction: {overlap_log}')
 
         # Write countries
         gadm_country.to_parquet(Path(gadm_output_dir) / f'gadm_{country_code}.parquet', compression='snappy')
         gadm_country.to_file(Path(gpkg_dir) / f'gadm_{country_code}.gpkg', driver="GPKG")
 
         # Check for overlaps and write to file if they exist
-        check = dask_geopandas.from_geopandas(gadm_country, npartitions = 10)
-        check = dask_geopandas.sjoin(left = check, right = check, predicate="overlaps")
-        check = check.compute()
-        if check.shape[0] > 0: 
-            logging.info(f"Number of overlaps: {check[0].shape}")
-            check.to_file(Path(overlaps_dir) / f'overlaps_{country_code}.gpkg', driver="GPKG")
+        # check = dask_geopandas.from_geopandas(gadm_country, npartitions = 10)
+        # check = dask_geopandas.sjoin(left = check, right = check, predicate="overlaps")
+        # check = check.compute()
+        # if check.shape[0] > 0: 
+        #     logging.info(f"Number of overlaps: {check[0].shape}")
+        #     check.to_file(Path(overlaps_dir) / f'overlaps_{country_code}.gpkg', driver="GPKG")
 
         t1 = time.time()
-        logging.info(f"Finished {country_code}: {gadm_country.shape} {str(round(t1-t0,3)/60)} minutes")
+        logging.info(f"Finished {country_code}: {gadm_country.shape} {round((t1-t0)/60,3)} minutes")
+        logging.info(f"------------")
 
     # Consolidate GADM data into one file
     gadm_output_list = list(filter(re.compile("gadm_").match, sorted(list(os.listdir(Path(gadm_output_dir))))))
@@ -274,9 +286,27 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
     for country_code in gadm_output_list: 
         gadm_clean = gpd.read_parquet(Path(gadm_output_dir) / f'gadm_{country_code}.parquet')
         gadm_combo = pd.concat([gadm_combo, gadm_clean], ignore_index=True)   
-    
+
+    # Run an all-country overlap correction
+    logging.info(f'Correcting all-country overlaps.')
+    f = io.StringIO()
+    with contextlib.redirect_stdout(f):
+        overlap_log = f.getvalue().replace('\n', ' ')
+        gadm_combo = remove_overlaps(data = gadm_combo, group_column = 'gadm_code', partition_count = 20) 
+        logging.info(f'Continent-scale overlap correction: {overlap_log}')
+
+    # Write the all-country file 
+    logging.info(f'Writing all-country files.')
     gadm_combo.to_parquet(Path(combined_dir) / f'all_gadm.parquet', compression='snappy')
     gadm_combo.to_file(Path(combined_dir) / f'all_gadm.gpkg', driver="GPKG")
+
+    # Re-write country files after all-country overlap correction
+    logging.info(f'Re-writing country files:')
+    for country_code in country_list: 
+        logging.info(f'{country_code}')
+        gadm_country = gadm_combo[gadm_combo['country_code'] == country_code]
+        gadm_country.to_parquet(Path(gadm_output_dir) / f'gadm_{country_code}.parquet', compression='snappy')
+        gadm_country.to_file(Path(gpkg_dir) / f'gadm_{country_code}.gpkg', driver="GPKG")
 
     logging.info(f"Finished")
 
