@@ -30,6 +30,7 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         GeoDataFrame with all overlapping geometries removed. 
         Assigns overlapping sections to the geometry group_column with most area in common or is closest.
     """
+    assert data.crs == 'epsg:4326', "data is not epsg:4326."
     column_list = list(data.columns)
 
     column_list_no_geo = list(data.columns)
@@ -50,28 +51,34 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         data_overlap = data_overlap[[group_column,'geometry']]
         
         overlap_list = data_overlap[group_column].unique()
-        data_overlap = data[data[group_column].isin(overlap_list)]
-        
+        #data_overlap = data[data[group_column].isin(overlap_list)]
+
+        # Resolve overlaps via intersection and polygonization
         all_intersections = [a.intersection(b) for a, b in list(itertools.combinations(data_overlap['geometry'], 2))]
         data_overlap = pd.concat([data_overlap['geometry'], gpd.GeoSeries(all_intersections).set_crs(4326)])
         data_overlap = list(shapely.ops.polygonize(data_overlap.boundary.unary_union))
         data_overlap = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(data_overlap)}).set_crs(4326).reset_index(drop=True)  
         data_overlap['geometry'] = data_overlap['geometry'].make_valid()
+        data_overlap = gpd.overlay(df1 = data_overlap, df2 = data[~data[group_column].isin(overlap_list)], how = 'difference', keep_geom_type = True, make_valid = True)
         data_overlap = data_overlap.assign(overlap_id = data_overlap.index.astype(int))
         
+        # Use overlay to relabel overlaps defaulting to label with largest area
         data_overlay = gpd.overlay(df1 = data_overlap, df2 = data, how='intersection', keep_geom_type = True, make_valid = True)
         data_overlay = data_overlay.assign(area = round(data_overlay['geometry'].to_crs(3395).area,0))
         data_overlay['area_rank'] = data_overlay.groupby('overlap_id')['area'].rank(method='first', ascending=False)
         data_overlay = data_overlay[data_overlay[group_column].notnull()]
         data_overlay = data_overlay[data_overlay['area_rank'] == 1]
-        data_overlay = data_overlay[column_list_id]
+        data_corrected = data_overlay[column_list_id]
         
-        data_sjoin = data_overlap[~data_overlap['overlap_id'].isin(data_overlay['overlap_id'].unique())]
-        data_sjoin = gpd.sjoin_nearest(left_df = data_sjoin.to_crs(3395), right_df = data.to_crs(3395), how = 'left').to_crs(4326)
-        data_sjoin = data_sjoin.drop_duplicates(subset=['overlap_id'], keep='first')
-        data_sjoin = data_sjoin[column_list_id]
+        # For fragments that did not fit in overlay use sjoin_nearest (take first when more than one touches)
+        data_sjoin = data_overlap[~data_overlap['overlap_id'].isin(data_corrected['overlap_id'].unique())]
+        if data_sjoin.shape[0] > 0:
+            data_sjoin = gpd.sjoin_nearest(left_df = data_sjoin.to_crs(3395), right_df = data.to_crs(3395), how = 'left').to_crs(4326)
+            data_sjoin = data_sjoin.drop_duplicates(subset=['overlap_id'], keep='first')
+            data_sjoin = data_sjoin[column_list_id]
+            data_corrected = pd.concat([data_corrected, data_sjoin], ignore_index=True)
         
-        data_corrected = pd.concat([data_overlay, data_sjoin], ignore_index=True)
+        # Merge in labels
         data_corrected = pd.merge(left = data_overlap, right = data_corrected, how='left', on='overlap_id')
         data_corrected = pd.concat([data_corrected[column_list], data[~data[group_column].isin(overlap_list)]])
         
@@ -82,8 +89,9 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         check = dask_geopandas.from_geopandas(data_corrected, npartitions = partition_count)
         check = dask_geopandas.sjoin(left = check, right = check, predicate="overlaps")
         check = check.compute()
+
         if check.shape[0] > 0: 
-            warnings.warn(f'Unable to remove all overlaps. {check.shape[0]} overlaps remain.')
+            warnings.warn(f'Unable to resolve all overlaps. {check.shape[0]} overlaps remain.')
         else:
             print('All overlaps resolved.')
     else:
