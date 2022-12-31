@@ -367,14 +367,17 @@ def mem_profile() -> str:
     return mem_use
 
 
-def main(log_file: Path, country_chunk: list, gadm_dir: Path, blocks_dir: Path, rasters_dir: Path, buildings_dir: Path, output_dir: Path):
+def main(log_file: Path, country_chunk: list, gadm_dir: Path, blocks_dir: Path, rasters_dir: Path, targets_file: Path, buildings_dir: Path, output_dir: Path):
 
-    logging.getLogger().setLevel(logging.INFO)
+    # logging.getLogger().setLevel(logging.INFO)
     logging.basicConfig(filename=Path(log_file), format='%(asctime)s:%(message)s: ', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
     logging.info(f"Countries to process: {country_chunk}")
     
     population_dir =  str(output_dir) + '/population'
     Path(population_dir).mkdir(parents=True, exist_ok=True)
+
+    combined_dir =  str(output_dir) + '/combined'
+    Path(combined_dir).mkdir(parents=True, exist_ok=True)
 
     #country_dict = {'DZA' : ['algeria', 'Africa', 'Algeria'], 'AGO' : ['angola', 'Africa', 'Angola'], 'BEN' : ['benin', 'Africa', 'Benin'], 'BWA' : ['botswana', 'Africa', 'Botswana'], 'BFA' : ['burkina-faso', 'Africa', 'Burkina Faso'], 'BDI' : ['burundi', 'Africa', 'Burundi'], 'CPV' : ['cape-verde', 'Africa', 'Cabo Verde'], 'CMR' : ['cameroon', 'Africa', 'Cameroon'], 'CAF' : ['central-african-republic', 'Africa', 'Central African Republic'], 'TCD' : ['chad', 'Africa', 'Chad'], 'COM' : ['comores', 'Africa', 'Comoros'], 'COG' : ['congo-brazzaville', 'Africa', 'Congo'], 'CIV' : ['ivory-coast', 'Africa', "Côte d'Ivoire"], 'COD' : ['congo-democratic-republic', 'Africa', 'Democratic Republic of the Congo '], 'DJI' : ['djibouti', 'Africa', 'Djibouti'], 'EGY' : ['egypt', 'Africa', 'Egypt'], 'GNQ' : ['equatorial-guinea', 'Africa', 'Equatorial Guinea'], 'ERI' : ['eritrea', 'Africa', 'Eritrea'], 'SWZ' : ['swaziland', 'Africa', 'Eswatini'], 'ETH' : ['ethiopia', 'Africa', 'Ethiopia'], 'GAB' : ['gabon', 'Africa', 'Gabon'], 'GMB' : ['senegal-and-gambia', 'Africa', 'Gambia'], 'GHA' : ['ghana', 'Africa', 'Ghana'], 'GIN' : ['guinea', 'Africa', 'Guinea'], 'GNB' : ['guinea-bissau', 'Africa', 'Guinea-Bissau'], 'KEN' : ['kenya', 'Africa', 'Kenya'], 'LSO' : ['lesotho', 'Africa', 'Lesotho'], 'LBR' : ['liberia', 'Africa', 'Liberia'], 'LBY' : ['libya', 'Africa', 'Libya'], 'MDG' : ['madagascar', 'Africa', 'Madagascar'], 'MWI' : ['malawi', 'Africa', 'Malawi'], 'MLI' : ['mali', 'Africa', 'Mali'], 'MRT' : ['mauritania', 'Africa', 'Mauritania'], 'MUS' : ['mauritius', 'Africa', 'Mauritius'], 'MAR' : ['morocco', 'Africa', 'Morocco'], 'ESH' : ['morocco', 'Africa', 'Morocco'], 'MOZ' : ['mozambique', 'Africa', 'Mozambique'], 'NAM' : ['namibia', 'Africa', 'Namibia'], 'NER' : ['niger', 'Africa', 'Niger'], 'NGA' : ['nigeria', 'Africa', 'Nigeria'], 'RWA' : ['rwanda', 'Africa', 'Rwanda'], 'SHN' : ['saint-helena-ascension-and-tristan-da-cunha', 'Africa', 'Saint Helena'], 'STP' : ['sao-tome-and-principe', 'Africa', 'Sao Tome and Principe'], 'SEN' : ['senegal-and-gambia', 'Africa', 'Senegal'], 'SYC' : ['seychelles', 'Africa', 'Seychelles'], 'SLE' : ['sierra-leone', 'Africa', 'Sierra Leone'], 'SOM' : ['somalia', 'Africa', 'Somalia'], 'ZAF' : ['south-africa', 'Africa', 'South Africa'], 'SSD' : ['south-sudan', 'Africa', 'South Sudan'], 'SDN' : ['sudan', 'Africa', 'Sudan'], 'TZA' : ['tanzania', 'Africa', 'Tanzania'], 'TGO' : ['togo', 'Africa', 'Togo'], 'TUN' : ['tunisia', 'Africa', 'Tunisia'], 'UGA' : ['uganda', 'Africa', 'Uganda'], 'ZMB' : ['zambia', 'Africa', 'Zambia'], 'ZWE' : ['zimbabwe', 'Africa', 'Zimbabwe'], 'AFG' : ['afghanistan', 'Asia', 'Afghanistan'], 'ARM' : ['armenia', 'Asia', 'Armenia'], 'AZE' : ['azerbaijan', 'Asia', 'Azerbaijan'], 'BHR' : ['gcc-states', 'Asia', 'Bahrain'], 'BGD' : ['bangladesh', 'Asia', 'Bangladesh'], 'BTN' : ['bhutan', 'Asia', 'Bhutan'], 'BRN' : ['malaysia-singapore-brunei', 'Asia', 'Brunei Darussalam'], 'MYS' : ['malaysia-singapore-brunei', 'Asia', 'Malaysia'], 'SGP' : ['malaysia-singapore-brunei', 'Asia', 'Singapore'], 'KHM' : ['cambodia', 'Asia', 'Cambodia'], 'CHN' : ['china', 'Asia', 'China'], 'IND' : ['india', 'Asia', 'India'], 'IDN' : ['indonesia', 'Asia', 'Indonesia'], 'IRQ' : ['iraq', 'Asia', 'Iraq'], 'IRN' : ['iran', 'Asia', 'Islamic Republic of Iran'], 'PSE' : ['israel-and-palestine', 'Asia', 'Palestine'], 'ISR' : ['israel-and-palestine', 'Asia', 'Israel'], 'JPN' : ['japan', 'Asia', 'Japan'], 'JOR' : ['jordan', 'Asia', 'Jordan'], 'KAZ' : ['kazakhstan', 'Asia', 'Kazakhstan'], 'KGZ' : ['kyrgyzstan', 'Asia', 'Kyrgyzstan'], 'LAO' : ['laos', 'Asia', 'Laos'], 'LBN' : ['lebanon', 'Asia', 'Lebanon'], 'MDV' : ['maldives', 'Asia', 'Maldives'], 'MNG' : ['mongolia', 'Asia', 'Mongolia'], 'MMR' : ['myanmar', 'Asia', 'Myanmar'], 'NPL' : ['nepal', 'Asia', 'Nepal'], 'PRK' : ['north-korea', 'Asia', 'North Korea'], 'PAK' : ['pakistan', 'Asia', 'Pakistan'], 'PHL' : ['philippines', 'Asia', 'Philippines'], 'KOR' : ['south-korea', 'Asia', 'South Korea'], 'LKA' : ['sri-lanka', 'Asia', 'Sri Lanka'], 'SYR' : ['syria', 'Asia', 'Syrian Arab Republic'], 'TWN' : ['taiwan', 'Asia', 'Taiwan'], 'TJK' : ['tajikistan', 'Asia', 'Tajikistan'], 'THA' : ['thailand', 'Asia', 'Thailand'], 'TKM' : ['turkmenistan', 'Asia', 'Turkmenistan'], 'UZB' : ['uzbekistan', 'Asia', 'Uzbekistan'], 'VNM' : ['vietnam', 'Asia', 'Vietnam'], 'YEM' : ['yemen', 'Asia', 'Yemen'], 'ALB' : ['albania', 'Europe', 'Albania'], 'AND' : ['andorra', 'Europe', 'Andorra'], 'AUT' : ['austria', 'Europe', 'Austria'], 'BLR' : ['belarus', 'Europe', 'Belarus'], 'BEL' : ['belgium', 'Europe', 'Belgium'], 'BIH' : ['bosnia-herzegovina', 'Europe', 'Bosnia and Herzegovina'], 'BGR' : ['bulgaria', 'Europe', 'Bulgaria'], 'HRV' : ['croatia', 'Europe', 'Croatia'], 'CYP' : ['cyprus', 'Europe', 'Cyprus'], 'CZE' : ['czech-republic', 'Europe', 'Czechia'], 'DNK' : ['denmark', 'Europe', 'Denmark'], 'EST' : ['estonia', 'Europe', 'Estonia'], 'FRO' : ['faroe-islands', 'Europe', 'Faroe Islands'], 'FIN' : ['finland', 'Europe', 'Finland'], 'FRA' : ['france', 'Europe', 'France'], 'GEO' : ['georgia', 'Europe', 'Georgia'], 'DEU' : ['germany', 'Europe', 'Germany'], 'GRC' : ['greece', 'Europe', 'Greece'], 'HUN' : ['hungary', 'Europe', 'Hungary'], 'ISL' : ['iceland', 'Europe', 'Iceland'], 'IRL' : ['ireland-and-northern-ireland', 'Europe', 'Ireland'], 'IMN' : ['isle-of-man', 'Europe', 'Isle of Man'], 'ITA' : ['italy', 'Europe', 'Italy'], 'KOS' : ['kosovo', 'Europe', 'Kosovo'], 'LVA' : ['latvia', 'Europe', 'Latvia'], 'LIE' : ['liechtenstein', 'Europe', 'Liechtenstein'], 'LTU' : ['lithuania', 'Europe', 'Lithuania'], 'LUX' : ['luxembourg', 'Europe', 'Luxembourg'], 'MLT' : ['malta', 'Europe', 'Malta'], 'MDA' : ['moldova', 'Europe', 'Moldova'], 'MCO' : ['monaco', 'Europe', 'Monaco'], 'MNE' : ['montenegro', 'Europe', 'Montenegro'], 'NLD' : ['netherlands', 'Europe', 'Netherlands'], 'MKD' : ['macedonia', 'Europe', 'North Macedonia'], 'NOR' : ['norway', 'Europe', 'Norway'], 'POL' : ['poland', 'Europe', 'Poland'], 'PRT' : ['portugal', 'Europe', 'Portugal'], 'ROU' : ['romania', 'Europe', 'Romania'], 'RUS' : ['russia', 'Europe', 'Russian Federation'], 'SRB' : ['serbia', 'Europe', 'Serbia'], 'SVK' : ['slovakia', 'Europe', 'Slovakia'], 'SVN' : ['slovenia', 'Europe', 'Slovenia'], 'ESP' : ['spain', 'Europe', 'Spain'], 'SWE' : ['sweden', 'Europe', 'Sweden'], 'CHE' : ['switzerland', 'Europe', 'Switzerland'], 'TUR' : ['turkey', 'Europe', 'Turkey'], 'UKR' : ['ukraine', 'Europe', 'Ukraine'], 'GBR' : ['great-britain', 'Europe', 'United Kingdom'], 'CAN' : ['canada', 'North America', 'Canada'], 'GRL' : ['greenland', 'North America', 'Greenland'], 'MEX' : ['mexico', 'North America', 'Mexico'], 'USA' : ['usa', 'North America', 'United States of America'], 'AUS' : ['australia', 'Oceania', 'Australia'], 'COK' : ['cook-islands', 'Oceania', 'Cook Islands'], 'FJI' : ['fiji', 'Oceania', 'Fiji'], 'KIR' : ['kiribati', 'Oceania', 'Kiribati'], 'MHL' : ['marshall-islands', 'Oceania', 'Marshall Islands'], 'FSM' : ['micronesia', 'Oceania', 'Micronesia'], 'NRU' : ['nauru', 'Oceania', 'Nauru'], 'NCL' : ['new-caledonia', 'Oceania', 'New Caledonia'], 'NZL' : ['new-zealand', 'Oceania', 'New Zealand'], 'NIU' : ['niue', 'Oceania', 'Niue'], 'PLW' : ['palau', 'Oceania', 'Palau'], 'PNG' : ['papua-new-guinea', 'Oceania', 'Papua New Guinea'], 'WSM' : ['samoa', 'Oceania', 'Samoa'], 'SLB' : ['solomon-islands', 'Oceania', 'Solomon Islands'], 'TON' : ['tonga', 'Oceania', 'Tonga'], 'TUV' : ['tuvalu', 'Oceania', 'Tuvalu'], 'VUT' : ['vanuatu', 'Oceania', 'Vanuatu'], 'ARG' : ['argentina', 'South America', 'Argentina'], 'BOL' : ['bolivia', 'South America', 'Bolivia'], 'BRA' : ['brazil', 'South America', 'Brazil'], 'CHL' : ['chile', 'South America', 'Chile'], 'COL' : ['colombia', 'South America', 'Colombia'], 'ECU' : ['ecuador', 'South America', 'Ecuador'], 'PRY' : ['paraguay', 'South America', 'Paraguay'], 'PER' : ['peru', 'South America', 'Peru'], 'SUR' : ['suriname', 'South America', 'Suriname'], 'URY' : ['uruguay', 'South America', 'Uruguay'], 'VEN' : ['venezuela', 'South America', 'Venezuela']}
     #country_list = list(country_dict.keys())
@@ -421,6 +424,13 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, blocks_dir: Path, 
     else: 
         raise ValueError('Empty country_chunk argument.')
 
+    if targets_file:
+        pop_targets = pd.read_csv(Path(targets_file))
+        pop_targets = pop[['ISO3_code',  'Time', 'TPopulation1July']]
+        pop_targets = pop_targets[pop_targets['Time'] == 2020]
+        pop_targets = pop_targets[pop_targets['ISO3_code'].isin(country_list)]
+        pop_targets = pop_targets.rename(columns={'ISO3_code':'country_code','Time':'year','TPopulation1July':'un_population'}).sort_values(by=['country_code']).reset_index(drop=True)
+        pop_targets['un_population'] = (pop_targets['un_population']*1000).astype(int)
 
     logging.info(f"Remaining countries: {country_list}")
 
@@ -471,7 +481,7 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, blocks_dir: Path, 
                     blocks_ls = allocate_population(pixel_data = pixels_ls, population_col = 'landscan', country_code = country_code, buildings_dir = buildings_dir, blocks_dir = blocks_dir, gadm_code_list = region_gadm_list, all_area = False, include_residual = True)
                     blocks_wp = allocate_population(pixel_data = pixels_wp, population_col = 'worldpop', country_code = country_code, buildings_dir = buildings_dir, blocks_dir = blocks_dir, gadm_code_list = region_gadm_list, all_area = False, include_residual = True)
                     a1 = time.time()
-                    print(f"{region_code}: {str(round((a1-a0)/60,3))} minutes")
+                    print(f"{region_code}: {round((a1-a0)/60,3)} minutes")
             blocks_pop = blocks_ls.merge(right = blocks_wp, how='outer', on= ['block_id','gadm_code','country_code'])
             blocks_pop['gadm_region'] = blocks_pop['gadm_code'].str.split('.').str[0] + '.' + blocks_pop['gadm_code'].str.split('_|\\.').str[1] 
             blocks_pop['gadm_region'].fillna(value = blocks_pop['country_code'], inplace=True)
@@ -514,14 +524,44 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, blocks_dir: Path, 
         c1 = time.time()
         logging.info(f"{country_code}: {str(round((c1-c0)/60,3))} minutes")
 
-        # Write population file
         blocks_pop_full = blocks_pop_full[['block_id', 'gadm_code', 'country_code', 'landscan_population','worldpop_population']]
+
+        # Add population adjustment
+        if targets_file:
+            blocks_pop_full = pd.merge(left = blocks_pop_full, right = pop_targets, how='left', on='country_code')
+            blocks_pop_full['landscan_total'] = blocks_pop_full.groupby(['country_code'])['landscan_population'].transform('sum')
+            blocks_pop_full['worldpop_total'] = blocks_pop_full.groupby(['country_code'])['worldpop_population'].transform('sum')
+            blocks_pop_full['landscan_population_un'] = (blocks_pop_full['landscan_population']/blocks_pop_full['landscan_total'])*blocks_pop_full['un_population']
+            blocks_pop_full['worldpop_population_un'] = (blocks_pop_full['worldpop_population']/blocks_pop_full['worldpop_total'])*blocks_pop_full['un_population']
+            blocks_pop_full = blocks_pop_full[['block_id', 'gadm_code', 'country_code', 'landscan_population', 'landscan_population_un', 'worldpop_population', 'worldpop_population_un']]
+
+        # Write population file
         blocks_pop_full.to_parquet(path = Path(population_dir) / f'population_{country_code}.parquet', engine='pyarrow', compression='snappy')
         logging.info('---------')
         del blocks_pop_full, ls_xr, wp_xr, ls_df, wp_df, landscan_share, worldpop_share
-    logging.info(f"Finished.")
-    logging.info('---------')
-    logging.info('---------')
+
+    # Consolidate GADM data into one file
+    logging.info(f"Consolidating countries.")
+    population_output_list = list(filter(re.compile("population_").match, sorted(list(os.listdir(Path(population_dir))))))
+    population_output_list = [(re.sub('population_', '', re.sub('.parquet', '', i))) for i in population_output_list] 
+
+    if targets_file:
+        all_population = pd.DataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'landscan_population': pd.Series(dtype= 'float64'), 'landscan_population_un': pd.Series(dtype= 'float64'), 'worldpop_population': pd.Series(dtype= 'float64'), 'worldpop_population_un': pd.Series(dtype= 'float64')})
+    else: 
+        all_population = pd.DataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'landscan_population': pd.Series(dtype= 'float64'), 'worldpop_population': pd.Series(dtype= 'float64')})
+
+    for country_code in population_output_list: 
+        population_country = gpd.read_parquet(Path(population_output_list) / f'population_{country_code}.parquet')
+        all_population = pd.concat([all_population, population_country], ignore_index=True)   
+
+    # Write the all-country file 
+    logging.info(f'Writing all-country files.')
+    all_population.to_parquet(Path(combined_dir) / f'all_population.parquet', compression='snappy')
+    all_population.to_csv(Path(combined_dir) / f'all_population.csv')
+
+    logging.info(f"Finished job.")
+    logging.info(f"------------")
+    logging.info(f"------------")
 
 def setup(args=None):    
     parser = argparse.ArgumentParser(description='Estimate population at the street block level.')
@@ -530,6 +570,7 @@ def setup(args=None):
     parser.add_argument('--gadm_dir', required=True, type=Path, dest="gadm_dir", help="Path to GADM parquet directory.")
     parser.add_argument('--blocks_dir', required=True, type=Path, dest="blocks_dir", help="Path to blocks directory.")
     parser.add_argument('--rasters_dir', required=True, type=Path, dest="rasters_dir", help="Path to population raster directory. Must have format of population/landscan/* and population/worldpop/*")
+    parser.add_argument('--targets_file', required=False, type=Path, dest="targets_file", help="Path to file with population targets at the country level.")
     parser.add_argument('--buildings_dir', required=True, type=Path, dest="buildings_dir", help="Path to building points directory.")
     parser.add_argument('--output_dir', required=True, type=Path, dest="output_dir", help="Path to top level output directory. Creates /population subdirectory.")
     return parser.parse_args(args)

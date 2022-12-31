@@ -21,7 +21,6 @@ import dask_geopandas
 np.set_printoptions(suppress=True)
 warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*')
 warnings.filterwarnings('ignore', message='.*dropped geometries of different geometry types than.*')
-warnings.filterwarnings('ignore', message='.ShapelyDeprecationWarning*') 
 
 def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: int = 10) -> gpd.GeoDataFrame:
     """ 
@@ -310,7 +309,6 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
     #     f.close()
     #     logging.info(f'Continent-scale overlap correction: {overlap_log}  {round((t1-t0)/60,3)} minutes')
     gadm_combo = remove_overlaps(data = gadm_combo, group_column = 'gadm_code', partition_count = 20) 
-
 
     # Write the all-country file 
     logging.info(f'Writing all-country files.')

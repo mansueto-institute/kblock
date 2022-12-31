@@ -180,6 +180,8 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
     if type(osm_data) == gpd.geodataframe.GeoDataFrame: 
         osm_data = from_shapely_srid(geometry = osm_data, srid = 4326)
     assert len(np.unique(pygeos.get_srid(osm_data))) == 1 and np.unique(pygeos.get_srid(osm_data))[0] == 4326, "osm_data is not epsg:4326."
+    print(gadm_code)
+    logging.info(f'{gadm_code}')
 
     gadm_data = gadm_data[gadm_data[gadm_column] == gadm_code]
     gadm_data = gadm_data.explode(index_parts=False)
@@ -242,11 +244,14 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
     block_gpkg_dir =  str(output_dir) + '/blocks/gpkg'
     Path(block_gpkg_dir).mkdir(parents=True, exist_ok=True)
     
-    block_overlaps_dir =  str(output_dir) + '/blocks/gpkg/overlaps'
-    Path(block_overlaps_dir).mkdir(parents=True, exist_ok=True)
+    #block_overlaps_dir =  str(output_dir) + '/blocks/gpkg/overlaps'
+    #Path(block_overlaps_dir).mkdir(parents=True, exist_ok=True)
 
     street_dir =  str(output_dir) + '/streets'
     Path(street_dir).mkdir(parents=True, exist_ok=True)
+
+    combined_dir =  str(output_dir) + '/combined'
+    Path(combined_dir).mkdir(parents=True, exist_ok=True)
 
     logging.info(f"block_dir: {block_dir}")
     logging.info(f"street_dir: {street_dir}")
@@ -363,7 +368,23 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         logging.info(f"Finished {country_code}.")
         logging.info(f'-------------')
 
+    # Consolidate GADM data into one file
+    logging.info(f"Consolidating countries.")
+    blocks_output_list = list(filter(re.compile("blocks_").match, sorted(list(os.listdir(Path(block_dir))))))
+    blocks_output_list = [(re.sub('blocks_', '', re.sub('.parquet', '', i))) for i in blocks_output_list] 
+
+    all_blocks = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'block_geohash': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
+    for country_code in blocks_output_list: 
+        block_country = gpd.read_parquet(Path(block_dir) / f'blocks_{country_code}.parquet')
+        all_blocks = pd.concat([all_blocks, block_country], ignore_index=True)   
+
+    # Write the all-country file 
+    logging.info(f'Writing all-country files.')
+    all_blocks.to_parquet(Path(combined_dir) / f'all_blocks.parquet', compression='snappy')
+    all_blocks.to_file(Path(combined_dir) / f'all_blocks.gpkg', driver="GPKG")
+
     logging.info(f"Finished job.")
+    logging.info(f"------------")
 
 def setup(args=None):    
     parser = argparse.ArgumentParser(description='Build blocks geometries.')

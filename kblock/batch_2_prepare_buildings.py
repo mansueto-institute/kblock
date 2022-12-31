@@ -92,7 +92,7 @@ def sjoin_buildings(block_data: gpd.GeoDataFrame, bldg_id_col: str, bldg_data: g
 
 def main(log_file: Path, country_chunk: list, codes_file: Path, progress_file: Path, blocks_dir: Path, buildings_dir: Path, output_dir: Path):
 
-    logging.getLogger().setLevel(logging.INFO)
+    #logging.getLogger().setLevel(logging.INFO)
     logging.basicConfig(filename=Path(log_file), format='%(asctime)s:%(message)s: ', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
     logging.info('Started')
 
