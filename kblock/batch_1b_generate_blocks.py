@@ -112,8 +112,14 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         # Resolve overlaps via intersection and polygonization
         all_intersections = [a.intersection(b) for a, b in list(itertools.combinations(data_overlap['geometry'], 2))]
         data_overlap = pd.concat([data_overlap['geometry'], gpd.GeoSeries(all_intersections).set_crs(4326)])
-        data_overlap = list(shapely.ops.polygonize(data_overlap.boundary.unary_union))
-        data_overlap = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(data_overlap)}).set_crs(4326).reset_index(drop=True)  
+        
+        overlap_array = pygeos.from_shapely(data_overlap)
+        overlap_array = pygeos.union_all([overlap_array])
+        overlap_array = pygeos.polygonize_full([overlap_array])[0]
+        overlap_array = pygeos.get_parts(pygeos.normalize(pygeos.get_parts(overlap_array))) 
+        overlap_array = pygeos.make_valid(overlap_array)
+
+        data_overlap = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(pygeos.to_shapely(overlap_array))}).set_crs(4326).reset_index(drop=True)  
         data_overlap['geometry'] = data_overlap['geometry'].make_valid()
         data_overlap = gpd.overlay(df1 = data_overlap, df2 = data[~data[group_column].isin(overlap_list)], how = 'difference', keep_geom_type = True, make_valid = True)
         data_overlap = data_overlap.assign(overlap_id = data_overlap.index.astype(int))
@@ -189,10 +195,10 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
 
     gadm_array = pygeos.from_shapely(gadm_data['geometry'])
     gadm_array = pygeos.multipolygons(gadm_array)
-    osm_data = pygeos.line_merge(pygeos.intersection(pygeos.multilinestrings(osm_data),gadm_array))
+    osm_data = pygeos.line_merge(pygeos.intersection_all([pygeos.multilinestrings(osm_data),gadm_array]))
     gadm_lines = pygeos.line_merge(pygeos.multilinestrings(pygeos.get_exterior_ring(pygeos.get_parts(gadm_array))))
 
-    polys = pygeos.polygonize_full([pygeos.union(osm_data,gadm_lines)])[0]
+    polys = pygeos.polygonize_full([pygeos.union_all([osm_data,gadm_lines])])[0]
     polys = pygeos.get_parts(pygeos.normalize(pygeos.get_parts(polys))) 
     polys = pygeos.make_valid(polys)
 
@@ -327,6 +333,11 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         # Make valid 
         block_bulk['geometry'] = block_bulk['geometry'].make_valid()
 
+        # Area, perimeter 
+        block_bulk['block_area'] = block_bulk['geometry'].to_crs(3395).area
+        block_bulk['block_perimeter'] = block_bulk['geometry'].to_crs(3395).length
+        block_bulk = block_bulk[['block_id','block_geohash','gadm_code','country_code','block_area','block_perimeter','geometry']]
+
         # Check area of input and output geometries
         input_area = round(sum(gadm_gpd.to_crs(3395).area)*1e-6,2)
         output_area = round(sum(block_bulk.to_crs(3395).area)*1e-6,2)
@@ -372,8 +383,8 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
     logging.info(f"Consolidating countries.")
     blocks_output_list = list(filter(re.compile("blocks_").match, sorted(list(os.listdir(Path(block_dir))))))
     blocks_output_list = [(re.sub('blocks_', '', re.sub('.parquet', '', i))) for i in blocks_output_list] 
-
-    all_blocks = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'block_geohash': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
+    
+    all_blocks = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'block_geohash': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'block_area': pd.Series(dtype='float64'), 'block_perimeter': pd.Series(dtype='float64'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
     for country_code in blocks_output_list: 
         block_country = gpd.read_parquet(Path(block_dir) / f'blocks_{country_code}.parquet')
         all_blocks = pd.concat([all_blocks, block_country], ignore_index=True)   

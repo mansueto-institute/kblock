@@ -5,7 +5,7 @@
 
 # iso_list=(DJI CPV COM STP SYC)
 
-iso_list=(SYC DJI)
+iso_list=(SYC DJI BDI)
 
 working_directory=/Users/nm/Downloads/update
 
