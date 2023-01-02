@@ -105,7 +105,7 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
             logging.warning(f'Unable to resolve all overlaps. {check.shape[0]} overlaps remain.')
             check = check[[group_column + '_left','geometry']].rename(columns={str(group_column + '_left'): group_column})
             unresolved_area = gpd.overlay(df1 = check, df2 = check, how='intersection', keep_geom_type = True, make_valid = True)
-            unresolved_area = sum(unresolved_area[unresolved_area['block_id_1'] != unresolved_area['block_id_2']].to_crs(3395).area)*1e-6
+            unresolved_area = sum(unresolved_area[unresolved_area[str(group_column + '_1')] != unresolved_area[str(group_column + '_2')]].to_crs(3395).area)*1e-6
             print(f'Unresolvable overlapping area: {unresolved_area} km2')
             logging.warning(f'Unresolvable overlapping area: {unresolved_area} km2')
         else:
