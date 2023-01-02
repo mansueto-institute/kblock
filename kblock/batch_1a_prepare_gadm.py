@@ -59,8 +59,14 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         # Resolve overlaps via intersection and polygonization
         all_intersections = [a.intersection(b) for a, b in list(itertools.combinations(data_overlap['geometry'], 2))]
         data_overlap = pd.concat([data_overlap['geometry'], gpd.GeoSeries(all_intersections).set_crs(4326)])
-        data_overlap = list(shapely.ops.polygonize(data_overlap.boundary.unary_union))
-        data_overlap = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(data_overlap)}).set_crs(4326).reset_index(drop=True)  
+        
+        overlap_array = pygeos.from_shapely(data_overlap)
+        overlap_array = pygeos.union_all([overlap_array])
+        overlap_array = pygeos.polygonize_full([overlap_array])[0]
+        overlap_array = pygeos.get_parts(pygeos.normalize(pygeos.get_parts(overlap_array))) 
+        overlap_array = pygeos.make_valid(overlap_array)
+
+        data_overlap = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(pygeos.to_shapely(overlap_array))}).set_crs(4326).reset_index(drop=True)  
         data_overlap['geometry'] = data_overlap['geometry'].make_valid()
         data_overlap = gpd.overlay(df1 = data_overlap, df2 = data[~data[group_column].isin(overlap_list)], how = 'difference', keep_geom_type = True, make_valid = True)
         data_overlap = data_overlap.assign(overlap_id = data_overlap.index.astype(int))
