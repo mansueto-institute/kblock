@@ -54,14 +54,9 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         data_overlap = data_overlap[[group_column,'geometry']]
         
         overlap_list = data_overlap[group_column].unique()
-        #data_overlap = data[data[group_column].isin(overlap_list)]
 
         # Resolve overlaps via intersection and polygonization
-        all_intersections = [a.intersection(b) for a, b in list(itertools.combinations(data_overlap['geometry'], 2))]
-        data_overlap = pd.concat([data_overlap['geometry'], gpd.GeoSeries(all_intersections).set_crs(4326)])
-        
-        overlap_array = pygeos.from_shapely(data_overlap)
-        overlap_array = pygeos.union_all([overlap_array])
+        overlap_array = pygeos.union_all([pygeos.line_merge(pygeos.boundary(pygeos.from_shapely(data_overlap['geometry'])))])
         overlap_array = pygeos.polygonize_full([overlap_array])[0]
         overlap_array = pygeos.get_parts(pygeos.normalize(pygeos.get_parts(overlap_array))) 
         overlap_array = pygeos.make_valid(overlap_array)
@@ -78,16 +73,7 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         data_overlay = data_overlay[data_overlay[group_column].notnull()]
         data_overlay = data_overlay[data_overlay['area_rank'] == 1]
         data_corrected = data_overlay[column_list_id]
-        
-        # # For fragments that did not fit in overlay use sjoin_nearest (take first when more than one touches) 
-        # # Commented off b/c these areas are negligible and may contain interior water features that were polygonized
-        # data_sjoin = data_overlap[~data_overlap['overlap_id'].isin(data_corrected['overlap_id'].unique())]
-        # if data_sjoin.shape[0] > 0:
-        #     data_sjoin = gpd.sjoin_nearest(left_df = data_sjoin.to_crs(3395), right_df = data.to_crs(3395), how = 'left').to_crs(4326)
-        #     data_sjoin = data_sjoin.drop_duplicates(subset=['overlap_id'], keep='first')
-        #     data_sjoin = data_sjoin[column_list_id]
-        #     data_corrected = pd.concat([data_corrected, data_sjoin], ignore_index=True)
-        
+                
         # Merge in labels
         data_corrected = pd.merge(left = data_overlap, right = data_corrected, how='left', on='overlap_id')
         data_corrected = pd.concat([data_corrected[column_list], data[~data[group_column].isin(overlap_list)]])
