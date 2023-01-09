@@ -48,6 +48,7 @@ def get_gadm_data(country_code: str, download_dir: Union[str, Path]) -> gpd.GeoD
     if len(dest_exist) == 0:
         #gadm_url = f"https://biogeo.ucdavis.edu/data/gadm3.6/shp/gadm36_{country_code}_shp.zip"
         gadm_url = f"https://biogeo.ucdavis.edu/data/gadm4.1/shp/gadm41_{country_code}_shp.zip"
+        # https://geodata.ucdavis.edu/gadm/gadm4.1/
         #temp_dir = tempfile.TemporaryDirectory()
         results = requests.get(URL(gadm_url))
         z = zipfile.ZipFile(io.BytesIO(results.content))
