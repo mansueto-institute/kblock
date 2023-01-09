@@ -53,7 +53,9 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         data_overlap = data_overlap.rename(columns={str(group_column + '_left'): group_column})
         data_overlap = data_overlap[[group_column,'geometry']]
         
+        # Filter to overlapping areas
         overlap_list = data_overlap[group_column].unique()
+        data_overlap = data[data[group_column].isin(overlap_list)][[group_column,'geometry']]
 
         # Resolve overlaps via intersection and polygonization
         overlap_array = pygeos.union_all([pygeos.line_merge(pygeos.boundary(pygeos.from_shapely(data_overlap['geometry'])))])

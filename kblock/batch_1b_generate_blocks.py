@@ -106,7 +106,9 @@ def remove_overlaps(data: gpd.GeoDataFrame, group_column: str, partition_count: 
         data_overlap = data_overlap.rename(columns={str(group_column + '_left'): group_column})
         data_overlap = data_overlap[[group_column,'geometry']]
         
+        # Filter to overlapping areas
         overlap_list = data_overlap[group_column].unique()
+        data_overlap = data[data[group_column].isin(overlap_list)][[group_column,'geometry']]
 
         # Resolve overlaps via intersection and polygonization
         overlap_array = pygeos.union_all([pygeos.line_merge(pygeos.boundary(pygeos.from_shapely(data_overlap['geometry'])))])
@@ -211,16 +213,33 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
     gadm_blocks = gadm_blocks.explode(index_parts=False)
     gadm_blocks = gadm_blocks[gadm_blocks.geom_type == "Polygon"]
     gadm_blocks = gadm_blocks[round(gadm_blocks['geometry'].to_crs(3395).area,0) > 0]
-    gadm_blocks = gadm_blocks.assign(block_id = [gadm_code + '_' + str(x) for x in list(gadm_blocks.index)])
+
+    input_area_check = sum(gadm_data['geometry'].to_crs(3395).area)*0.0001
+    output_area_check = sum(gadm_blocks['geometry'].to_crs(3395).area)*0.0001
+    residual_area_check = input_area_check - output_area_check 
+
+    if residual_area_check >= 1: 
+        residual_area = gadm_data['geometry'].unary_union.difference(gadm_blocks['geometry'].unary_union)
+        residual_area = gpd.GeoDataFrame.from_dict({"country_code": gadm_code[0:3],"gadm_code": gadm_code,'geometry': gpd.GeoSeries(residual_area)}).set_crs(4326)  
+        residual_area = residual_area.explode(index_parts = False)
+        residual_area = residual_area[residual_area.geom_type == "Polygon"]
+        residual_area = residual_area[residual_area.to_crs(3395).area*0.0001 >= 1]
+        print(f'Hectares to add {round(sum(residual_area.to_crs(3395).area)*0.0001,2)}.')
+        logging.warning(f'Hectares to add {round(sum(residual_area.to_crs(3395).area)*0.0001,2)}.')
+        gadm_blocks = pd.concat([gadm_blocks[['country_code','gadm_code','geometry']], residual_area[['country_code','gadm_code','geometry']]], ignore_index=True)
     
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Geometry is in a geographic CRS.")
         representative_pt = gadm_blocks.geometry.representative_point().to_list()
     precision_level = 18
     gadm_blocks['block_geohash'] = list(map(lambda x: pygeohash.encode(x.x,x.y, precision=precision_level), representative_pt))
+
+    gadm_blocks = gadm_blocks.sort_values(by='block_geohash', ascending=False).reset_index(drop=True)
+    gadm_blocks = gadm_blocks.assign(block_id = [gadm_code + '_' + str(x) for x in list(gadm_blocks.index)])
     gadm_blocks = gadm_blocks[['block_id','block_geohash','gadm_code','country_code','geometry']].reset_index(drop = True).to_crs(epsg=4326)
     
     return gadm_blocks
+
 
 def mem_profile() -> str: 
     """
@@ -296,17 +315,17 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         # Read OSM files
         osm_gpd = gpd.read_parquet(Path(osm_dir) / f'{country_code}-linestring.parquet')
         osm_gpd = osm_gpd.explode(ignore_index = True)
+        osm_gpd = osm_gpd[~osm_gpd['highway'].isin(['footway', 'bridleway', 'steps', 'corridor', 'path', 'cycleway'])]
         osm_pygeos = from_shapely_srid(geometry = osm_gpd, srid = 4326) 
-    
+
+        # Write street (non-footpath) geometries
+        osm_streets = osm_gpd[osm_gpd['highway'].notnull()]
+        osm_streets.to_parquet(Path(street_dir) / f'streets_{country_code}.parquet', compression='snappy')
+        del osm_gpd, osm_streets
+
         # Read GADM files
         gadm_gpd = gpd.read_parquet(Path(gadm_dir) / f'gadm_{country_code}.parquet')
         #gadm_gpd = gpd.read_parquet(Path(gadm_dir) / 'all_gadm.parquet', memory_map = True, filters = [('country_code', 'in', [country_code])])
-        
-        # Write street (non-footpath) geometries
-        osm_streets = osm_gpd[osm_gpd['highway'].notnull()]
-        osm_streets = osm_streets[~osm_streets['highway'].isin(['footway', 'bridleway', 'steps', 'corridor', 'path', 'cycleway'])]
-        osm_streets.to_parquet(Path(street_dir) / f'streets_{country_code}.parquet', compression='snappy')
-        del osm_gpd
         
         # GADM list
         gadm_list = list(gadm_gpd['gadm_code'].unique())
