@@ -71,6 +71,7 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
     
     bldg_data = bldg_data.loc[bldg_data[block_col] == block_id].copy() 
     block_data = block_data.loc[block_data[block_col] == block_id].copy() 
+    assert block_data.shape[0] == 1, 'block_id is not unique.'
     block = pygeos.from_shapely(block_data['geometry'])
     if not pygeos.is_valid(block): block = pygeos.make_valid(block)
 
@@ -111,7 +112,8 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
             nearest_external_street = 0
         else: 
             nearest_external_street = pygeos.distance(pygeos.centroid(building_points), pygeos.extract_unique_points(pygeos.multilinestrings(street_linestrings)))
-        
+
+        assert len(street_multilinestrings) == 1, 'street_linestrings unable to format as MultiLineString.'
         if not pygeos.is_empty(street_multilinestrings[0]):
             street_multilinestrings = pygeos.line_merge(street_multilinestrings)
             internal_buffer = pygeos.buffer(street_multilinestrings, radius=buffer_radius/2)
@@ -123,8 +125,10 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
             complete_buffer = complete_buffer[pygeos.intersects(complete_buffer, pygeos.multilinestrings(exterior_access))]
             complete_buffer = pygeos.union_all(complete_buffer)
             off_network_geometry = pygeos.difference(street_multilinestrings, complete_buffer)
+            assert len(off_network_geometry) == 1, 'off_network_geometry unable to format as MultiLineString.'
             off_network_length = pygeos.length(off_network_geometry)[0]
             on_network_geometry = pygeos.intersection(street_multilinestrings, complete_buffer)
+            assert len(on_network_geometry) == 1, 'on_network_geometry unable to format as MultiLineString.'
             on_network_length = pygeos.length(on_network_geometry)[0]
             on_network_buffer = pygeos.buffer(on_network_geometry, radius = 1)
             if on_network_length > 0: 
@@ -221,6 +225,7 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
     
     bldg_data = bldg_data.loc[bldg_data[block_col] == block_id].copy() 
     block_data = block_data.loc[block_data[block_col] == block_id].copy() 
+    assert block_data.shape[0] == 1, 'block_id is not unique.'
     block = pygeos.from_shapely(block_data['geometry'])
     if not pygeos.is_valid(block): block = pygeos.make_valid(block)
     
@@ -258,6 +263,7 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
         if not pygeos.is_valid(street_multilinestrings): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
         street_multilinestrings = pygeos.intersection(street_multilinestrings, block)
 
+        assert len(street_multilinestrings) == 1, 'street_linestrings unable to format as MultiLineString.'
         if not pygeos.is_empty(street_multilinestrings[0]):
             street_multilinestrings = pygeos.line_merge(street_multilinestrings)
             internal_buffer = pygeos.buffer(street_multilinestrings, radius=(buffer_radius/2))

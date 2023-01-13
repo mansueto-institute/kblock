@@ -1,6 +1,7 @@
 #!/bin/bash
 
-iso_list=(DJI CPV COM STP SYC)
+# CPV COM STP 
+iso_list=(DJI SYC)
 
 working_directory=/Users/nm/Downloads/update
 

@@ -425,8 +425,8 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, blocks_dir: Path, 
         raise ValueError('Empty country_chunk argument.')
 
     if targets_file:
-        pop_targets = pd.read_csv(Path(targets_file))
-        pop_targets = pop[['ISO3_code',  'Time', 'TPopulation1July']]
+        pop_targets = pd.read_csv(Path(targets_file), low_memory=False)
+        pop_targets = pop_targets[['ISO3_code',  'Time', 'TPopulation1July']]
         pop_targets = pop_targets[pop_targets['Time'] == 2020]
         pop_targets = pop_targets[pop_targets['ISO3_code'].isin(country_list)]
         pop_targets = pop_targets.rename(columns={'ISO3_code':'country_code','Time':'year','TPopulation1July':'un_population'}).sort_values(by=['country_code']).reset_index(drop=True)
@@ -551,7 +551,7 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, blocks_dir: Path, 
         all_population = pd.DataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'landscan_population': pd.Series(dtype= 'float64'), 'worldpop_population': pd.Series(dtype= 'float64')})
 
     for country_code in population_output_list: 
-        population_country = gpd.read_parquet(Path(population_output_list) / f'population_{country_code}.parquet')
+        population_country = pd.read_parquet(Path(population_dir) / f'population_{country_code}.parquet')
         all_population = pd.concat([all_population, population_country], ignore_index=True)   
 
     # Write the all-country file 
