@@ -224,9 +224,10 @@ def build_blocks(gadm_data: gpd.GeoDataFrame, osm_data: Union[pygeos.Geometry, g
         residual_area = residual_area.explode(index_parts = False)
         residual_area = residual_area[residual_area.geom_type == "Polygon"]
         residual_area = residual_area[residual_area.to_crs(3395).area*0.0001 >= 1]
-        print(f'Hectares to add {round(sum(residual_area.to_crs(3395).area)*0.0001,2)}.')
-        logging.warning(f'Hectares to add {round(sum(residual_area.to_crs(3395).area)*0.0001,2)}.')
-        gadm_blocks = pd.concat([gadm_blocks[['country_code','gadm_code','geometry']], residual_area[['country_code','gadm_code','geometry']]], ignore_index=True)
+        if residual_area.shape[0] > 0:
+            print(f'Hectares to add {round(sum(residual_area.to_crs(3395).area)*0.0001,2)}.')
+            logging.warning(f'Hectares to add {round(sum(residual_area.to_crs(3395).area)*0.0001,2)}.')
+            gadm_blocks = pd.concat([gadm_blocks[['country_code','gadm_code','geometry']], residual_area[['country_code','gadm_code','geometry']]], ignore_index=True)
     
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Geometry is in a geographic CRS.")
