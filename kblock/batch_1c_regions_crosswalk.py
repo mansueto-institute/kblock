@@ -279,6 +279,9 @@ def main(ghsl_file: Path, blocks_dir: Path, output_dir: Path):
 
     full_xwalk = full_xwalk[['block_id', 'block_geohash', 'gadm_code', 'country_code', 'country_name', 'continent', 'area_type', 'class_urban_hierarchy', 'class_urban_periurban_nonurban', 'class_urban_nonurban', 'urban_id', 'urban_center_name', 'urban_country_code', 'urban_country_name', 'conurbation_id', 'conurbation_area_name', 'conurbation_area_name_short', 'conurbation_country_code', 'conurbation_country_name', 'c4_code', 'country_code_c4', 'country_area_class_urban_hierarchy', 'urban_id_c4', 'urban_center_class_urban_hierarchy', 'conurbation_id_c4', 'conurbation_class_urban_hierarchy', 'c3_code', 'country_code_c3', 'country_area_class_urban_periurban_nonurban', 'urban_id_c3', 'urban_center_class_urban_periurban_nonurban', 'conurbation_id_c3', 'conurbation_class_urban_periurban_nonurban', 'c2_code', 'country_code_c2', 'country_area_class_urban_nonurban', 'urban_id_c2', 'urban_center_class_urban_nonurban', 'conurbation_id_c2', 'conurbation_class_urban_nonurban', 'urban_regional_layer_code', 'urban_layer_code']]
 
+    assert full_xwalk[full_xwalk['block_id'].duplicated()].shape[0] == 0
+    assert full_xwalk[full_xwalk['block_id'].isnull()].shape[0] == 0
+
     # Write file to parquet CSV
     print('Writing files')
     full_xwalk.to_parquet(path = Path(output_dir) / f'ghsl_crosswalk.parquet')

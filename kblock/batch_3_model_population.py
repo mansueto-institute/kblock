@@ -238,7 +238,7 @@ def allocate_population(pixel_data: pd.DataFrame, population_col: str, country_c
 
     population_total = sum(pixel_data[population_col])
     print_total_pop = str(round(population_total,2))
-    print('Population in full pixel area: ', print_total_pop)
+    print(f'Population in full pixel area: {print_total_pop}')
 
     block_population = pd.DataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'building_population': pd.Series(dtype= 'float64')})
 
@@ -249,8 +249,8 @@ def allocate_population(pixel_data: pd.DataFrame, population_col: str, country_c
         # Remove pixels with null buildings and blocks
         population_buildings = pixel_buildings_data[(pixel_buildings_data['building_geohash'].notnull()) & (pixel_buildings_data['block_id'].notnull())].copy() 
     
-        print_building_pixels = str(len(population_buildings['pixel_hash'].unique())) + ' out of ' + str(pixel_data.shape[0])
-        print('Pixels with building intersections: ',print_building_pixels)
+        
+        print(f"Pixels with building intersections: {len(population_buildings['pixel_hash'].unique())} out of {pixel_data.shape[0]}")
     
         # Allocate pixel population down to building points based on footprint area
         population_buildings['building_area_pixel'] = population_buildings.groupby(['pixel_hash'])['building_area'].transform('sum')
@@ -258,23 +258,20 @@ def allocate_population(pixel_data: pd.DataFrame, population_col: str, country_c
         # Aggregate building population to block_id level
         block_population = population_buildings[['building_geohash','country_code','gadm_code','block_id','building_area','building_area_pixel','building_population']]
         block_population = block_population.groupby(['block_id','gadm_code','country_code']).agg({'building_area': 'sum','building_population':'sum'}).reset_index()
-    
-        print_building_population = str(round(sum(block_population['building_population']),2)) + ' ' + str(round((sum(block_population['building_population'])/population_total)*100,3)) + '%'
-        print('Population allocated by building area: ', print_building_population)
+        
+        print(f"Population allocated by building area: {round(sum(block_population['building_population']),2)}  {round((sum(block_population['building_population'])/population_total)*100,3)} %")
     
         # Subset residual pixels that do not intersect buildings points
         population_residual = pixel_data[~pixel_data['pixel_hash'].isin(population_buildings['pixel_hash'].unique())].copy()
         pop_residual = sum(population_residual[population_col])
-        print_block_population = str(round(pop_residual,2))
-        print('Population not intersecting buildings to reallocate: ',print_block_population)
+        print(f'Population not intersecting buildings to reallocate: {round(pop_residual,2)}')
 
         # Allocate residual of population that did not intersect buildings by block area
         if pop_residual > 0: 
             population_residual['pixel_area'] = population_residual.to_crs(3395).area
             population_residual = population_residual[['pixel_hash','x','y',population_col,'pixel_area','geometry']]
     
-            print_residual_pixels = str(population_residual.shape[0]) + ' out of ' + str(pixel_data.shape[0])
-            print('Residual pixels to allocate by block area: ',print_residual_pixels)
+            print(f'Residual pixels to allocate by block area: {population_residual.shape[0]} out of {pixel_data.shape[0]}')
     
             # Form new geometries based on overlap between residual pixels and block_id
             #population_residual.geometry = population_residual.buffer(0)
@@ -309,26 +306,26 @@ def allocate_population(pixel_data: pd.DataFrame, population_col: str, country_c
             # Remove blocks with no building area
             block_population = block_population.loc[(block_population['building_area'] > 0) | (block_population['building_area'].notnull())]
     
-            print_allocated_population = str(round(sum(block_population['building_population']),2)) + ' ' + str(round((sum(block_population['building_population'])/population_total)*100,3)) + '%'
-            print('Running sum of population allocated: ',print_allocated_population)
-            print_blocks_no_buildings_population = str(round(pop_residual,2))
-            print('Population allocated to blocks with no buildings: ', print_blocks_no_buildings_population)
+            print(f"Running sum of population allocated: {round(sum(block_population['building_population']),2)} {round((sum(block_population['building_population'])/population_total)*100,3)} %")
+            print(f'Population allocated to blocks with no buildings: {round(pop_residual,2)}')
     
             # Re-allocate residual population allocated to blocks with no buildings to the GADM level by building area
-            if pop_residual > 0: 
+            if abs(pop_residual) > 0: 
                 block_population = pd.merge(left = block_population, right = pop_adjust, how='left', on='gadm_code')
                 block_population['building_population_adjust'] = block_population['building_population_adjust'].fillna(0)
                 block_population['building_area_gadm'] = block_population.groupby(['gadm_code'])['building_area'].transform('sum')
-                block_population['building_population'] = (block_population['building_population_adjust'] * (block_population['building_area']/block_population['building_area_gadm'])) + block_population['building_population']
-    
+                block_population['building_area_share'] = block_population['building_area']/block_population['building_area_gadm']
+                block_population['building_area_share'] = block_population['building_area_share'].fillna(0)
+                block_population['building_population'] = (block_population['building_population_adjust'] * block_population['building_area_share']) + block_population['building_population']
+
                 # Re-allocate any remaining residual population based to country scale block_id level building area shares (should be a small number from pixels touching no blocks or buildings)
                 pop_residual = (population_total-sum(block_population['building_population']))
     
-                print_no_blocks_no_buildings_population = str(round(pop_residual,2))
-                print('Population not touching blocks or buildings: ',print_no_blocks_no_buildings_population)
-                if pop_residual > 0: 
+                print(f'Population not touching blocks or buildings: {round(pop_residual,2)}')
+                if abs(pop_residual) > 0: 
                     if include_residual is True:
                         block_population['building_population'] = ((population_total-sum(block_population['building_population'])) * (block_population['building_area']/sum(block_population['building_area']))) + block_population['building_population']   
+                        print(f"Population residual after adjustment: {round((population_total-sum(block_population['building_population'])),0)}")
     
     # Append block_id codes with no population
     block_population = block_population[['block_id','gadm_code','country_code','building_population']]
@@ -340,16 +337,14 @@ def allocate_population(pixel_data: pd.DataFrame, population_col: str, country_c
     block_universe = block_universe[~block_universe['block_id'].isin(block_population['block_id'].unique())]
     block_population = pd.concat([block_population, block_universe], ignore_index=True)
     if population_total > 0:
-        print_share_overall = str(round((sum(block_population['building_population'])/population_total)*100,3)) + '%'
-        print('Allocated share of population in full pixel area: ', print_share_overall)
+        print(f"Allocated share of population in full pixel area: {round((sum(block_population['building_population'])/population_total)*100,3)} %")
 
     # Create target area flag
     if gadm_code_list:
         block_population.loc[block_population['gadm_code'].isin(gadm_code_list), 'target_area'] = int(1)
         block_population['target_area'] = block_population['target_area'].fillna(0)
-        if population_total > 0:
-            print_share_target = str(round((sum(block_population[block_population['target_area'] == 1]['building_population'])/population_total*100),3)) + '%'
-            print('Allocated share in gadm_code_list target area: ',print_share_target)
+        if population_total > 0:            
+            print(f"Allocated share in gadm_code_list target area: {round((sum(block_population[block_population['target_area'] == 1]['building_population'])/population_total*100),3)} %")
         if all_area is False:
             block_population = block_population[block_population['target_area'] == 1]
             block_population = block_population.drop(['target_area'], axis=1)
