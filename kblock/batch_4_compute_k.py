@@ -12,6 +12,7 @@ from pathlib import Path
 import psutil
 import gc
 import warnings
+import contextlib
 import logging
 import time
 import re
@@ -498,31 +499,44 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
 
         # Build block_id list
         country_blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True)    
-        # gadm_list = list(country_blocks['gadm_code'].unique())
-        block_list = list(country_blocks['block_id'].unique())
+        block_id_universe = country_blocks[['block_id']]
         del country_blocks
 
-        # Read in bulilding points
+        # Read in building points
         country_buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_points_{country_code}.parquet')
+        block_id_universe_buildings = country_buildings[['block_id']]   
+        block_id_universe_buildings = block_id_universe_buildings.drop_duplicates()
+
+        block_id_universe_buildings = block_id_universe_buildings.assign(buildings_present=int(1))
+        block_id_universe = pd.merge(left = block_id_universe, right = block_id_universe_buildings, how='left', on='block_id')
+        block_id_universe['buildings_present'] = block_id_universe['buildings_present'].fillna(0)
+        
+        # Remove completed blocks
         dask_folder_exists = os.path.isdir(Path(dask_dir) / f'{country_code}.parquet')
         if dask_folder_exists: 
             if len(os.listdir(Path(dask_dir) / f'{country_code}.parquet')) >= 1:            
                 completed_blocks = dask.dataframe.read_parquet(path = Path(dask_dir) / f'{country_code}.parquet').compute()
-                # completed_gadm_list = list(completed_blocks['gadm_code'].unique())
-                # country_buildings = country_buildings[~country_buildings['gadm_code'].isin(completed_gadm_list)]
                 completed_block_list = list(completed_blocks['block_id'].unique())
+                block_id_universe_completed = completed_blocks[['block_id']]
+                block_id_universe_completed = block_id_universe_completed.drop_duplicates()
+                block_id_universe_completed = block_id_universe_completed.assign(completed=int(1)) 
+                block_id_universe = pd.merge(left = block_id_universe, right = block_id_universe_completed, how='left', on='block_id')
+                block_id_universe['completed'] = block_id_universe['completed'].fillna(0)
                 country_buildings = country_buildings[~country_buildings['block_id'].isin(completed_block_list)]
-                logging.info(f"Completed blocks: {len(completed_block_list)} {round(len(completed_block_list)/len(block_list),2)*100} %")
+                logging.info(f"Completed blocks: {len(completed_block_list)} {round(len(completed_block_list)/block_id_universe.shape[0],2)*100} %")
                 del completed_blocks
+            else:
+                block_id_universe['completed'] = block_id_universe['completed'].assign(completed=int(0)) 
+        else:
+            block_id_universe['completed'] = block_id_universe['completed'].assign(completed=int(0)) 
 
-        # Reconcile building and block GADM lists 
-        building_block_list = country_buildings['block_id'].unique()
-        building_check = [x for x in building_block_list if x not in set(block_list)] 
-        logging.info(f"Blocks in building file not in blocks: {len(building_check)}")
-        block_check = [x for x in block_list if x not in set(building_block_list)] 
-        logging.info(f"Blocks in blocks file not in buildings: {len(block_check)}")
-        intersected_list = [building_block_list, block_list] 
-        block_list = list(set.intersection(*map(set,intersected_list)))
+        # Reconcile buildings and completed blocks with full universe
+        logging.info(f"Blocks total: {block_id_universe.shape[0]}")
+        logging.info(f"Blocks with buildings present: {block_id_universe.loc[(block_id_universe['buildings_present'] == 0)].shape[0]}")
+        logging.info(f"Blocks without buildings present: {block_id_universe.loc[(block_id_universe['buildings_present'] == 1)].shape[0]}")
+        logging.info(f"Blocks completed: {block_id_universe.loc[(block_id_universe['completed'] == 1)].shape[0]}")
+        logging.info(f"Blocks not completed: {block_id_universe.loc[(block_id_universe['completed'] == 0)].shape[0]}")
+        block_list = block_id_universe.loc[(block_id_universe['completed'] == 0) & (block_id_universe['buildings_present'] == 1)]['block_id'].unique()
         logging.info(f"Blocks to process: {len(block_list)}")
         
         # Partition buildings into evenly sized chunks
@@ -540,6 +554,10 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         streets = gpd.read_parquet(path = Path(streets_dir) / f'streets_{country_code}.parquet', memory_map = True).to_crs(3395)
         streets = streets[streets['geometry'].notnull()].to_crs(3395)
         streets = from_shapely_srid(geometry = streets, srid = 3395)
+
+        # Initial multiprocessing pool
+        #if number_of_cores > 1: 
+        #    pool = multiprocessing.Pool(processes = number_of_cores, maxtasksperchild = 100) 
         
         # Loop over the chunks
         for i in chunk_dict.items():
@@ -596,7 +614,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
             # Incremental file build
             k_output = dask.dataframe.from_pandas(data = k_output, npartitions = 1) 
             dask.dataframe.to_parquet(df = k_output, path = Path(dask_dir) / f'{country_code}.parquet', engine='pyarrow', compression='snappy', append=True, ignore_divisions=True)
-            del blocks, street_network, buildings, k_output, k_chunk 
+            del pool, blocks, street_network, buildings, k_output, k_chunk 
             gc.collect()
 
             ## Parallelize layer computation
