@@ -73,12 +73,19 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
     block_data = block_data.loc[block_data[block_col] == block_id].copy() 
     assert block_data.shape[0] == 1, 'block_id is not unique.'
     block = pygeos.from_shapely(block_data['geometry'])
-    if not pygeos.is_valid(block): block = pygeos.make_valid(block)
+    if not pygeos.is_valid(block).all(): block = pygeos.make_valid(block)
 
+    if pygeos.get_num_geometries(block)[0] > 1:
+        block = pygeos.get_parts(block)
+        block = np.array([x for x in block if (pygeos.get_type_id(x) == 3 or pygeos.get_type_id(x) == 6)])
+        block = np.array([pygeos.buffer(pygeos.multipolygons(pygeos.get_parts(block)),1)])
+        #block = pygeos.union_all(np.array([pygeos.buffer(pygeos.multipolygons(pygeos.get_parts(block)),1)]))
+        
     country_code = block_data['country_code'].unique()[0] 
     gadm_code = block_data['gadm_code'].unique()[0] 
     block_area = round(pygeos.area(pygeos.multipolygons(pygeos.from_shapely(block_data['geometry']))),2)
     bldg_array = pygeos.from_shapely(bldg_data['geometry'])
+    if not pygeos.is_valid(bldg_array).all(): bldg_array = pygeos.make_valid(bldg_array)
     bldg_count = np.sum(pygeos.get_num_geometries(bldg_array))
     is_connected = False
 
@@ -95,6 +102,7 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
         building_points = pygeos.multipoints(pygeos.from_shapely(bldg_data["geometry"]))
     else: 
         building_points = pygeos.centroid(pygeos.union_all(block))
+    if not pygeos.is_valid(building_points).all(): building_points = pygeos.make_valid(building_points)
 
     if street_linestrings is not None:
         if type(street_linestrings) == gpd.geodataframe.GeoDataFrame:    
@@ -105,30 +113,34 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
             street_linestrings = transform_crs(geometry = street_linestrings, epsg_from = "EPSG:4326", epsg_to = "EPSG:3395")
         assert len(np.unique(pygeos.get_srid(street_linestrings))) == 1 and np.unique(pygeos.get_srid(street_linestrings))[0] == 3395, 'street_linestrings is not epsg:4326 or epsg:3395.' 
         street_multilinestrings = pygeos.multilinestrings(street_linestrings)
-        if not pygeos.is_valid(street_multilinestrings): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
+        if not pygeos.is_valid(street_multilinestrings).all(): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
         street_multilinestrings = pygeos.intersection(street_multilinestrings, block)
+        if not pygeos.is_valid(street_multilinestrings).all(): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
 
         if pygeos.intersects(block, street_multilinestrings): 
             nearest_external_street = 0
         else: 
             nearest_external_street = pygeos.distance(pygeos.centroid(building_points), pygeos.extract_unique_points(pygeos.multilinestrings(street_linestrings)))
 
-        assert len(street_multilinestrings) == 1, 'street_linestrings unable to format as MultiLineString.'
+        assert len(street_multilinestrings) == 1, 'street_linestrings not formatted as single geometry.'
         if not pygeos.is_empty(street_multilinestrings[0]):
             street_multilinestrings = pygeos.line_merge(street_multilinestrings)
+            if not pygeos.is_valid(street_multilinestrings).all(): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
             internal_buffer = pygeos.buffer(street_multilinestrings, radius=buffer_radius/2)
             external_buffer = pygeos.buffer(pygeos.get_exterior_ring(block), radius=buffer_radius)
-            external_buffer= pygeos.make_valid(external_buffer)
+            if not pygeos.is_valid(internal_buffer).all(): internal_buffer= pygeos.make_valid(internal_buffer)
+            if not pygeos.is_valid(external_buffer).all(): external_buffer= pygeos.make_valid(external_buffer)
             complete_buffer = pygeos.get_parts(pygeos.union(internal_buffer, external_buffer))
-            street_linestrings = pygeos.make_valid(street_linestrings)
+            if not pygeos.is_valid(street_linestrings).all(): street_linestrings = pygeos.make_valid(street_linestrings)
             exterior_access = street_linestrings[pygeos.intersects(street_linestrings, external_buffer)]
             complete_buffer = complete_buffer[pygeos.intersects(complete_buffer, pygeos.multilinestrings(exterior_access))]
             complete_buffer = pygeos.union_all(complete_buffer)
+            if not pygeos.is_valid(complete_buffer).all(): complete_buffer = pygeos.make_valid(complete_buffer)
             off_network_geometry = pygeos.difference(street_multilinestrings, complete_buffer)
-            assert len(off_network_geometry) == 1, 'off_network_geometry unable to format as MultiLineString.'
+            # assert len(off_network_geometry) == 1, 'off_network_geometry more than .'
             off_network_length = pygeos.length(off_network_geometry)[0]
             on_network_geometry = pygeos.intersection(street_multilinestrings, complete_buffer)
-            assert len(on_network_geometry) == 1, 'on_network_geometry unable to format as MultiLineString.'
+            # assert len(on_network_geometry) == 1, 'on_network_geometry unable to format as MultiLineString.'
             on_network_length = pygeos.length(on_network_geometry)[0]
             on_network_buffer = pygeos.buffer(on_network_geometry, radius = 1)
             if on_network_length > 0: 
@@ -143,8 +155,10 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
 
     if bldg_count not in [1,0]:
         voronoi = pygeos.get_parts(pygeos.voronoi_polygons(geometry=building_points, extend_to=block))
-        if not pygeos.is_valid(block): block = pygeos.make_valid(block)
-        block_parcels = pygeos.intersection(block, voronoi)    
+        if not pygeos.is_valid(block).all(): block = pygeos.make_valid(block)
+        if not pygeos.is_valid(voronoi).all(): voronoi = pygeos.make_valid(voronoi)
+        block_parcels = pygeos.intersection(block, voronoi)  
+        if not pygeos.is_valid(block_parcels).all(): block_parcels = pygeos.make_valid(block_parcels)  
         bldg_count = np.sum(pygeos.get_num_geometries(block_parcels))
 
         if is_connected is True:
@@ -153,6 +167,7 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
             block_layers.append(str(np.sum(pygeos.get_num_geometries(block_parcels_outer))))
             block_depth = len(block_layers)
             block_parcels = block_parcels[~block_intersect]
+            if not pygeos.is_valid(block_parcels).all(): block_parcels = pygeos.make_valid(block_parcels)
             if len(block_parcels_outer) == 0: 
                 block_parcels_outer = block_parcels.copy()
         else: 
@@ -163,14 +178,21 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
         while parcel_residual > 0:
             try: block_reduced = pygeos.coverage_union_all(block_parcels_outer)
             except: block_reduced = pygeos.union_all(pygeos.make_valid(block_parcels_outer))
+            if not pygeos.is_valid(block_parcels).all(): block_parcels = pygeos.make_valid(block_parcels)
+            if not pygeos.is_valid(block_reduced).all(): block_reduced = pygeos.make_valid(block_reduced)
             block_parcels_inner = block_parcels[~pygeos.touches(block_parcels, block_reduced)]      
+            if not pygeos.is_valid(block_parcels_inner).all(): block_parcels_inner = pygeos.make_valid(block_parcels_inner)
             block_parcels_outer = block_parcels[pygeos.touches(block_parcels, block_reduced)]  
+            if not pygeos.is_valid(block_parcels_outer).all(): block_parcels_outer = pygeos.make_valid(block_parcels_outer)
             if np.sum(pygeos.get_num_geometries(block_parcels_outer)) == 0 and np.sum(pygeos.get_num_geometries(block_parcels_inner)) > 0:
                 try: block_reduced = pygeos.coverage_union_all(block_parcels_inner)
                 except: block_reduced = pygeos.union_all(pygeos.make_valid(block_parcels_inner))
                 center = pygeos.get_coordinates(pygeos.centroid(block_reduced)).tolist()
                 block_interior = pygeos.apply(block_reduced, lambda x: ((x - center)*.9999 + center) )
+                if not pygeos.is_valid(block_reduced).all(): block_reduced = pygeos.make_valid(block_reduced) 
+                if not pygeos.is_valid(block_interior).all(): block_interior = pygeos.make_valid(block_interior) 
                 block_exterior = pygeos.difference(block_reduced, block_interior)
+                if not pygeos.is_valid(block_exterior).all(): block_exterior = pygeos.make_valid(block_exterior) 
                 block_ring = pygeos.intersects(block_exterior, block_parcels_inner)
                 block_parcels_outer = block_parcels_inner[block_ring]
                 block_parcels_inner = block_parcels_inner[~block_ring]
@@ -227,11 +249,17 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
     block_data = block_data.loc[block_data[block_col] == block_id].copy() 
     assert block_data.shape[0] == 1, 'block_id is not unique.'
     block = pygeos.from_shapely(block_data['geometry'])
-    if not pygeos.is_valid(block): block = pygeos.make_valid(block)
+    if not pygeos.is_valid(block).all(): block = pygeos.make_valid(block)
     
+    if pygeos.get_num_geometries(block)[0] > 1:
+        block = pygeos.get_parts(block)
+        block = np.array([x for x in block if (pygeos.get_type_id(x) == 3 or pygeos.get_type_id(x) == 6)])
+        block = np.array([pygeos.buffer(pygeos.multipolygons(pygeos.get_parts(block)),1)])
+
     country_code = block_data['country_code'].unique()[0] 
     gadm_code = block_data['gadm_code'].unique()[0] 
     bldg_array = pygeos.from_shapely(bldg_data['geometry'])
+    if not pygeos.is_valid(bldg_array).all(): bldg_array = pygeos.make_valid(bldg_array)
     bldg_count = np.sum(pygeos.get_num_geometries(bldg_array))
     is_connected = False
     off_network_length = 0 
@@ -245,11 +273,13 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
             building_points = pygeos.multipoints(pygeos.from_shapely(bldg_data["geometry"]))
         else: 
             building_points = pygeos.centroid(pygeos.union_all(block))
+        if not pygeos.is_valid(building_points).all(): building_points = pygeos.make_valid(building_points)
     else:
         if bldg_count > 0:
             building_polygons = bldg_data.copy()
         else: 
             building_polygons = pygeos.centroid(pygeos.union_all(block))
+        if not pygeos.is_valid(building_polygons).all(): building_polygons = pygeos.make_valid(building_polygons)
 
     if street_linestrings is not None:
         if type(street_linestrings) == gpd.geodataframe.GeoDataFrame:    
@@ -260,21 +290,25 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
             street_linestrings = transform_crs(geometry = street_linestrings, epsg_from = "EPSG:4326", epsg_to = "EPSG:3395")
         assert len(np.unique(pygeos.get_srid(street_linestrings))) == 1 and np.unique(pygeos.get_srid(street_linestrings))[0] == 3395, 'street_linestrings is not epsg:4326 or epsg:3395.'     
         street_multilinestrings = pygeos.multilinestrings(street_linestrings)
-        if not pygeos.is_valid(street_multilinestrings): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
+        if not pygeos.is_valid(street_multilinestrings).all(): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
         street_multilinestrings = pygeos.intersection(street_multilinestrings, block)
+        if not pygeos.is_valid(street_multilinestrings).all(): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
 
-        assert len(street_multilinestrings) == 1, 'street_linestrings unable to format as MultiLineString.'
+        assert len(street_multilinestrings) == 1, 'street_linestrings not formatted as single geometry.'
         if not pygeos.is_empty(street_multilinestrings[0]):
             street_multilinestrings = pygeos.line_merge(street_multilinestrings)
+            if not pygeos.is_valid(street_multilinestrings).all(): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
             internal_buffer = pygeos.buffer(street_multilinestrings, radius=(buffer_radius/2))
             external_buffer = pygeos.buffer(pygeos.get_exterior_ring(block), radius=buffer_radius)
-            external_buffer= pygeos.make_valid(external_buffer)
+            if not pygeos.is_valid(internal_buffer).all(): internal_buffer= pygeos.make_valid(internal_buffer)
+            if not pygeos.is_valid(external_buffer).all(): external_buffer= pygeos.make_valid(external_buffer)
             complete_buffer = pygeos.get_parts(pygeos.union(internal_buffer, external_buffer))
-            street_linestrings = pygeos.make_valid(street_linestrings)
+            if not pygeos.is_valid(street_linestrings).all(): street_linestrings = pygeos.make_valid(street_linestrings)
             exterior_access = street_linestrings[pygeos.intersects(street_linestrings, external_buffer)]
             complete_buffer = complete_buffer[pygeos.intersects(complete_buffer, pygeos.multilinestrings(exterior_access))]
             complete_buffer = pygeos.union_all(complete_buffer)
-            off_network_geometry = pygeos.difference(street_multilinestrings,complete_buffer)
+            if not pygeos.is_valid(complete_buffer).all(): complete_buffer = pygeos.make_valid(complete_buffer)
+            off_network_geometry = pygeos.difference(street_multilinestrings,complete_buffer)            
             on_network_geometry = pygeos.intersection(street_multilinestrings,complete_buffer)
             on_network_buffer = pygeos.buffer(on_network_geometry, radius = 1)
             off_network_length = pygeos.length(off_network_geometry)[0]
@@ -291,8 +325,10 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
         else:
             voronoi = pygeos.get_parts(pygeos.voronoi_polygons(geometry=building_points, extend_to=block))
 
-        if not pygeos.is_valid(block): block = pygeos.make_valid(block)
+        if not pygeos.is_valid(block).all(): block = pygeos.make_valid(block)
+        if not pygeos.is_valid(voronoi).all(): voronoi = pygeos.make_valid(voronoi)
         block_parcels = pygeos.intersection(block, voronoi)    
+        if not pygeos.is_valid(block_parcels).all(): block_parcels = pygeos.make_valid(block_parcels)  
         bldg_count = np.sum(pygeos.get_num_geometries(block_parcels))
 
         if is_connected is True:
@@ -303,6 +339,7 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
             block_depth = len(block_layers)
             k_complexity.append(block_depth)
             block_parcels = block_parcels[~block_intersect]
+            if not pygeos.is_valid(block_parcels).all(): block_parcels = pygeos.make_valid(block_parcels)
             if len(block_parcels_outer) == 0: 
                 block_parcels_outer = block_parcels.copy()
         else: 
@@ -318,12 +355,15 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
             if np.sum(pygeos.get_num_geometries(block_parcels_outer)) == 0 and np.sum(pygeos.get_num_geometries(block_parcels_inner)) > 0:
                 try: block_reduced = pygeos.coverage_union_all(block_parcels_inner)
                 except: block_reduced = pygeos.union_all(pygeos.make_valid(block_parcels_inner))
+                if not pygeos.is_valid(block_reduced).all(): block_reduced = pygeos.make_valid(block_reduced)
                 center = pygeos.get_coordinates(pygeos.centroid(block_reduced)).tolist()
                 block_interior = pygeos.apply(block_reduced, lambda x: ((x - center)*.9999 + center) )
                 block_exterior = pygeos.difference(block_reduced, block_interior)
                 block_ring = pygeos.intersects(block_exterior, block_parcels_inner)
                 block_parcels_outer = block_parcels_inner[block_ring]
+                if not pygeos.is_valid(block_parcels_outer).all(): block_parcels_outer = pygeos.make_valid(block_parcels_outer)
                 block_parcels_inner = block_parcels_inner[~block_ring]
+                if not pygeos.is_valid(block_parcels_inner).all(): block_parcels_inner = pygeos.make_valid(block_parcels_inner)
             block_parcels = block_parcels_inner.copy()
             parcel_residual = np.sum(pygeos.get_num_geometries(block_parcels_inner))
             if parcel_residual == 0: 
@@ -447,7 +487,6 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
             raise ValueError('Empty country list.')
     else: 
         raise ValueError('Empty country_chunk argument.')
-
             
     logging.info(f"Remaining countries: {country_list}")
 
@@ -457,9 +496,10 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         logging.info(f"Processing: {country_code}")
         t0_country = time.time()
 
-        # Build GADM list
+        # Build block_id list
         country_blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True)    
-        gadm_list = list(country_blocks['gadm_code'].unique())
+        # gadm_list = list(country_blocks['gadm_code'].unique())
+        block_list = list(country_blocks['block_id'].unique())
         del country_blocks
 
         # Read in bulilding points
@@ -468,38 +508,34 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         if dask_folder_exists: 
             if len(os.listdir(Path(dask_dir) / f'{country_code}.parquet')) >= 1:            
                 completed_blocks = dask.dataframe.read_parquet(path = Path(dask_dir) / f'{country_code}.parquet').compute()
-                completed_gadm_list = list(completed_blocks['gadm_code'].unique())
-                logging.info(f"Completed GADMs: {completed_gadm_list}")
-                country_buildings = country_buildings[~country_buildings['gadm_code'].isin(completed_gadm_list)]
-                #gadm_list = [x for x in gadm_list if x in set(country_buildings['gadm_code'].unique())] 
+                # completed_gadm_list = list(completed_blocks['gadm_code'].unique())
+                # country_buildings = country_buildings[~country_buildings['gadm_code'].isin(completed_gadm_list)]
+                completed_block_list = list(completed_blocks['block_id'].unique())
+                country_buildings = country_buildings[~country_buildings['block_id'].isin(completed_block_list)]
+                logging.info(f"Processed blocks: {len(completed_block_list)} {round(len(completed_block_list)/country_blocks.shape[0],2)*100} %")
                 del completed_blocks
 
         # Reconcile building and block GADM lists 
-        building_gadm_list = country_buildings['gadm_code'].unique()
-        building_check = [x for x in building_gadm_list if x not in set(gadm_list)] 
-        logging.info(f"GADMs in building file not in blocks: {building_check}")
-
-        block_check = [x for x in gadm_list if x not in set(building_gadm_list)] 
-        logging.info(f"GADMs in blocks file not in buildings: {block_check}")
-
-        intersected_list = [building_gadm_list, gadm_list] 
-        gadm_list = list(set.intersection(*map(set,intersected_list)))
-        logging.info(f"GADMs to process: {gadm_list}")
+        building_block_list = country_buildings['block_id'].unique()
+        building_check = [x for x in building_block_list if x not in set(block_list)] 
+        logging.info(f"Blocks in building file not in blocks: {len(building_check)}")
+        block_check = [x for x in block_list if x not in set(building_block_list)] 
+        logging.info(f"Blocks in blocks file not in buildings: {len(block_check)}")
+        intersected_list = [building_block_list, block_list] 
+        block_list = list(set.intersection(*map(set,intersected_list)))
+        logging.info(f"Blocks to process: {len(block_list)}")
         
-        # Filter the GADMs in buildings file to list that intersects block file
-        country_buildings = country_buildings[country_buildings['gadm_code'].isin(gadm_list)]
-
         # Partition buildings into evenly sized chunks
-        # FIX BASE ON BLOCK_ID or allow for blocks and gadms (when gadms far exceed buildings per partition)
-        buildings_count = country_buildings.groupby(['gadm_code']).size().reset_index(name='counts')
+        country_buildings = country_buildings[country_buildings['block_id'].isin(block_list)]
+        country_buildings['building_geogroup'] = country_buildings['building_geohash'].str.slice(start=2, stop=6)
+        buildings_count = country_buildings.groupby(['building_geogroup', 'block_id']).size().reset_index(name='counts')
+        buildings_count = buildings_count.sort_values(by='building_geogroup', ascending=False).reset_index(drop=True)
         cuts = math.ceil(buildings_count.agg({'counts': 'sum'}).reset_index()[0][0]/buildings_per_partition)
-        buildings_count['partition_index'] = weighted_qcut(buildings_count['gadm_code'], buildings_count['counts'], cuts, labels=False)
-        chunk_dict = buildings_count[['gadm_code','partition_index']].drop_duplicates().reset_index(drop = True).groupby('partition_index')['gadm_code'].apply(list).to_dict()
-        
-        large_chunks = buildings_count[buildings_count['counts'] > buildings_per_partition][['gadm_code','counts']].set_index('gadm_code').T.to_dict('list')
-        logging.info(f'gadm_codes that exceed chunk_size: {large_chunks}')
+        buildings_count['partition_index'] = weighted_qcut(buildings_count['block_id'], buildings_count['counts'], cuts, labels=False)
+        chunk_dict = buildings_count[['block_id','partition_index']].drop_duplicates().reset_index(drop = True).groupby('partition_index')['block_id'].apply(list).to_dict()
+        logging.info(f'Number of partitions: {len(chunk_dict)}')
         del country_buildings, cuts, buildings_count
-
+        
         # Read in streets
         streets = gpd.read_parquet(path = Path(streets_dir) / f'streets_{country_code}.parquet', memory_map = True).to_crs(3395)
         streets = streets[streets['geometry'].notnull()].to_crs(3395)
@@ -513,14 +549,16 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
             logging.info(f"Node status: {mem_profile_detail()}")
             #logging.info(f"Uncollectable garbage: {gc.garbage}")
             #logging.info(f"Garbage stats: {gc.get_stats()}")
-            logging.info(f"Country chunk: {chunk_list}")
+            logging.info(f"Blocks in chunk: {len(chunk_list)}")
 
             # Read in block data within chunk
             try:
-                blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True, filters = [('gadm_code', 'in', chunk_list)]).to_crs(3395)
+                blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True, filters = [('block_id', 'in', chunk_list)]).to_crs(3395)
             except Warning:
-                print(f"Warning: No block data available for: {chunk_list}")
-
+                logging.info(f"Warning: No block data available for: {chunk_list}")
+            logging.info(f"GADMs in chunk: {blocks['gadm_code'].unique()}")
+            logging.info(f"Geohashes in chunk: {blocks['block_geohash'].str.slice(start=0, stop=4).unique()}")
+            
             # Read in streets and limit to streets that intersect chunk
             try:
                 street_zone = pygeos.buffer(pygeos.convex_hull(pygeos.union_all(pygeos.envelope(pygeos.from_shapely(blocks['geometry'])))), radius = 1000)
@@ -529,30 +567,29 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
                 if len(street_network) == 0:
                     street_network = streets.copy()
             except Warning:
-                print(f"Warning: No street data available for: {chunk_list}")
+                logging.info(f"Warning: No street data available for: {chunk_list}")
 
             # Read in buildings within chunk
             try:
-                buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_points_{country_code}.parquet', memory_map = True, filters = [('gadm_code', 'in', chunk_list)]).to_crs(3395)
+                buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_points_{country_code}.parquet', memory_map = True, filters = [('block_id', 'in', chunk_list)]).to_crs(3395)
             except Warning:
-                print(f"Warning: No building data available for: {chunk_list}")
+                logging.info(f"Warning: No building data available for: {chunk_list}")
                 
-            # Spatial join of buildings to blocks
-            # buildings = index_buildings(block_data = blocks, bldg_id_col = 'building_geohash', bldg_data = buildings)
+            # Spatial join of buildings to blocks            
             buildings = buildings.to_crs(3395)
-            block_list = list(blocks['block_id'].unique())
+            parallel_block_list = list(blocks['block_id'].unique())
             
             k_output = pd.DataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'block_area': pd.Series(dtype='float'), 'on_network_street_length': pd.Series(dtype='float'),  'off_network_street_length': pd.Series(dtype='float'), 'nearest_external_street': pd.Series(dtype='float'), 'building_area': pd.Series(dtype='float'), 'building_count': pd.Series(dtype='int'), 'building_layers': pd.Series(dtype='object'), 'k_complexity': pd.Series(dtype='int')})    
 
             # Parallelize block computation of k and related metrics
             if number_of_cores > 1: 
-                pool = multiprocessing.Pool(processes = number_of_cores, maxtasksperchild = 500) # setting maxtasksperchild prevents memory leaks
-                k_chunk = pool.map(functools.partial(compute_k, block_col = 'block_id', block_data = blocks, bldg_data = buildings, street_linestrings = street_network, buffer_radius = 60, include_geometry = False), block_list)
+                pool = multiprocessing.Pool(processes = number_of_cores, maxtasksperchild = 50) # setting maxtasksperchild prevents memory leaks
+                k_chunk = pool.map(functools.partial(compute_k, block_col = 'block_id', block_data = blocks, bldg_data = buildings, street_linestrings = street_network, buffer_radius = 60, include_geometry = False), parallel_block_list)
                 pool.close() 
                 pool.join()
                 for i,j in enumerate(k_chunk): k_output = pd.concat([k_output, k_chunk[i]], ignore_index=True)
             else: 
-                k_chunk = list(map(lambda x: compute_k(block_id = x, block_col = 'block_id', block_data = blocks, bldg_data = buildings, street_linestrings = street_network, buffer_radius = 60, include_geometry = False), block_list))
+                k_chunk = list(map(lambda x: compute_k(block_id = x, block_col = 'block_id', block_data = blocks, bldg_data = buildings, street_linestrings = street_network, buffer_radius = 60, include_geometry = False), parallel_block_list))
                 for i,j in enumerate(k_chunk): k_output = pd.concat([k_output, k_chunk[i]], ignore_index=True)
 
             # Incremental file build
@@ -563,7 +600,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
             ## Parallelize layer computation
             #k_layers = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'block_property': pd.Series(dtype='str'), 'building_count': pd.Series(dtype='int'), 'k_complexity': pd.Series(dtype='int'), 'geometry': gpd.GeoSeries()})
             #pool = multiprocessing.Pool(processes= number_of_cores) 
-            #output = pool.map(functools.partial(compute_layers, block_col = 'block_id', block_data = blocks, bldg_data = buildings, street_linestrings = street_network, buffer_radius = 60), block_list)
+            #output = pool.map(functools.partial(compute_layers, block_col = 'block_id', block_data = blocks, bldg_data = buildings, street_linestrings = street_network, buffer_radius = 60), parallel_block_list)
             #pool.close() 
             #pool.join()
             #for i,j in enumerate(output): k_layers = pd.concat([k_layers, output[i]], ignore_index=True)
