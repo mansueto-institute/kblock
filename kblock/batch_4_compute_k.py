@@ -596,7 +596,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
             # Incremental file build
             k_output = dask.dataframe.from_pandas(data = k_output, npartitions = 1) 
             dask.dataframe.to_parquet(df = k_output, path = Path(dask_dir) / f'{country_code}.parquet', engine='pyarrow', compression='snappy', append=True, ignore_divisions=True)
-            del blocks, street_zone, street_network, buildings, k_output, k_chunk 
+            del blocks, street_network, buildings, k_output, k_chunk 
             gc.collect()
 
             ## Parallelize layer computation
