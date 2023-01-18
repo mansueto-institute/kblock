@@ -1,12 +1,12 @@
 #!/bin/bash
 
-country_chunk=(DJI COM STP SYC CPV) 
+country_chunk=(SYC ) #DJI COM STP LBR CPV
 
 working_directory=/Users/nm/Downloads/update
 
 log_file_arg=$working_directory/jobs/deploy_4_compute_k.log
 country_chunk_arg=${country_chunk[@]}
-chunk_size_arg=50000
+chunk_size_arg=10000
 core_count_arg=1
 blocks_dir_arg=$working_directory/outputs/blocks
 streets_dir_arg=$working_directory/outputs/streets
