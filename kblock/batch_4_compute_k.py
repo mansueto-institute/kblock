@@ -512,7 +512,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
                 # country_buildings = country_buildings[~country_buildings['gadm_code'].isin(completed_gadm_list)]
                 completed_block_list = list(completed_blocks['block_id'].unique())
                 country_buildings = country_buildings[~country_buildings['block_id'].isin(completed_block_list)]
-                logging.info(f"Processed blocks: {len(completed_block_list)} {round(len(completed_block_list)/country_blocks.shape[0],2)*100} %")
+                logging.info(f"Completed blocks: {len(completed_block_list)} {round(len(completed_block_list)/len(block_list),2)*100} %")
                 del completed_blocks
 
         # Reconcile building and block GADM lists 
@@ -574,6 +574,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
                 buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_points_{country_code}.parquet', memory_map = True, filters = [('block_id', 'in', chunk_list)]).to_crs(3395)
             except Warning:
                 logging.info(f"Warning: No building data available for: {chunk_list}")
+            logging.info(f"Buildings in chunk: {buildings.shape[0]}")
                 
             # Spatial join of buildings to blocks            
             buildings = buildings.to_crs(3395)
@@ -583,7 +584,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
 
             # Parallelize block computation of k and related metrics
             if number_of_cores > 1: 
-                pool = multiprocessing.Pool(processes = number_of_cores, maxtasksperchild = 50) # setting maxtasksperchild prevents memory leaks
+                pool = multiprocessing.Pool(processes = number_of_cores, maxtasksperchild = 100) 
                 k_chunk = pool.map(functools.partial(compute_k, block_col = 'block_id', block_data = blocks, bldg_data = buildings, street_linestrings = street_network, buffer_radius = 60, include_geometry = False), parallel_block_list)
                 pool.close() 
                 pool.join()
@@ -596,6 +597,7 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
             k_output = dask.dataframe.from_pandas(data = k_output, npartitions = 1) 
             dask.dataframe.to_parquet(df = k_output, path = Path(dask_dir) / f'{country_code}.parquet', engine='pyarrow', compression='snappy', append=True, ignore_divisions=True)
             del blocks, street_network, buildings, k_output, k_chunk 
+            gc.collect()
 
             ## Parallelize layer computation
             #k_layers = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'block_property': pd.Series(dtype='str'), 'building_count': pd.Series(dtype='int'), 'k_complexity': pd.Series(dtype='int'), 'geometry': gpd.GeoSeries()})
