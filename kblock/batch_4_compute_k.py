@@ -6,20 +6,19 @@ import geopandas as gpd
 gpd.options.use_pygeos = True
 
 import pyproj
-from typing import List, Union
 from pandas._libs.lib import is_integer
 from pathlib import Path
 import psutil
 import gc
 import warnings
-import contextlib
 import logging
 import time
 import re
 import os
-import functools
+import collections
 import argparse
 import math
+import typing
 
 import multiprocessing
 import dask 
@@ -30,119 +29,89 @@ from shapely.errors import ShapelyDeprecationWarning
 warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*')
 #warnings.filterwarnings("ignore", category=ShapelyDeprecationWarning)
 
-def transform_crs(geometry: pygeos.Geometry, epsg_from = "EPSG:4326", epsg_to = "EPSG:3395") -> pygeos.Geometry:
-    """
-    Transform PyGEOS Geometry from one coordinate 
-    reference system to another
-    Args:
-        geometry: PyGEOS Geometry array
-        epsg_from: string, anything accepted by pyproj.CRS.from_user_input(), (i.e., "EPSG:4326")
-        epsg_to: string, anything accepted by pyproj.CRS.from_user_input(), (i.e., "EPSG:4326")
-    Returns:
-        PyGEOS Geometry array
-    """
-    transformer = pyproj.Transformer.from_crs(crs_from = epsg_from, crs_to = epsg_to, always_xy=True)
-    coords = pygeos.get_coordinates(geometry)
-    new_coords = transformer.transform(coords[:, 0], coords[:, 1])
-    data = pygeos.set_coordinates(geometry.copy(), np.array(new_coords).T)
-    return data
+def inputs_generator(block_id_col: str, blocks: gpd.GeoDataFrame, buildings: gpd.GeoDataFrame, streets: gpd.GeoDataFrame) -> typing.Generator[typing.Tuple[str, gpd.GeoSeries, gpd.GeoSeries, gpd.GeoSeries], None, None]:
+    for block_id in blocks[block_id_col].unique():
+        yield (
+            block_id,
+            blocks.loc[(blocks[block_id_col] == block_id), "geometry"],
+            buildings.loc[(buildings[block_id_col] == block_id), "geometry"],
+            streets.loc[(streets[block_id_col] == block_id), "geometry"],
+        )    
 
-def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame, street_linestrings: Union[pygeos.Geometry, gpd.GeoDataFrame] = None, buffer_radius: float = 100, include_geometry: bool = True) -> Union[gpd.GeoDataFrame, pd.DataFrame]:
+def compute_k(block_id: str, block: gpd.GeoSeries, buildings: gpd.GeoSeries, streets: gpd.GeoSeries, buffer_radius: float = 100, include_geometry: bool = False, srid: int = 3395) -> typing.Union[gpd.GeoDataFrame, pd.DataFrame]:
     """
-    Computes the k-complexity value for each block as well as block level metadata taking a GeoDataFrame of enclosed blocks, 
-    the indexed building GeoDataFrame, and street linestrings in the form of a PyGEOS Geometry (or GeoDataFrame with slower performance).
+    Computes the k-complexity value for an enclosed block, buildings, and street linestrings.
     Args:
-        block_id: string, unique identification code in block_col
-        block_col: string, column name that contains the block_id codes (present in block_data and bldg_data)
-        block_data: GeoDataFrame output returned from build_blocks() function, requires CRS 4326 or 3395
-        bldg_data: GeoDataFrame, requires CRS 4326 or 3395, must contain block_col containing block_id
-        street_linestrings: GeoDataFrame or PyGEOS Geometry array (optional), linestrings representing street networks, requires CRS 4326 or 3395
-        buffer_radius: float (optional), extends disconnected street_linestrings to street network that are within a set tolerance in meters
-        include_geometry: bool (optional), default True, if False the block geometry will not be included and function will return a Pandas DataFrame
+        block_id: string, unique identification code
+        block: GeoSeries of a single Polygon representing enclosed block
+        buildings: GeoSeries of Points or Polygons representing buildings
+        streets: GeoSeries of Linestrings or MultiLinestrings representing street networks
+        buffer_radius: float (optional), defaults to 100 meters, extends disconnected street_linestrings to street network that are within a set tolerance in meters
+        include_geometry: bool (optional), defaults to True, if False the block geometry will not be included and function will return a Pandas DataFrame
+        srid: integer (optional), defaults to 3395, representing spatial reference identifier, for meter conversion
     Returns:
-        GeoDataFrame with block geometries in row and the columns: 'block_id','block_area','building_area','building_count','building_layers','k_complexity'
-        Geometry projected in CRS 4326.
+        DataFrame or GeoDataFrame for individual block geometry. Geometry projected in CRS 4326.
     """
-    assert block_data.crs in ['epsg:3395','epsg:4326'], "block_data is not epsg:4326 or epsg:3395."
-    assert bldg_data.crs in ['epsg:3395','epsg:4326'], "bldg_data is not epsg:4326 or epsg:3395."
-    if block_data.crs == 'epsg:4326': block_data = block_data.to_crs(epsg=3395)
-    if bldg_data.crs == 'epsg:4326': bldg_data = bldg_data.to_crs(epsg=3395)
-
     block_layers = [] 
-    
-    bldg_data = bldg_data.loc[bldg_data[block_col] == block_id].copy() 
-    block_data = block_data.loc[block_data[block_col] == block_id].copy() 
-    assert block_data.shape[0] == 1, 'block_id is not unique.'
-    block = pygeos.from_shapely(block_data['geometry'])
-    if not pygeos.is_valid(block).all(): block = pygeos.make_valid(block)
 
+    # Check block geometry
+    assert block.geom_type.unique().all() == 'Polygon', 'block geometry is not a Polygon.'
+    block = pygeos.set_srid(pygeos.from_shapely(block.to_crs(epsg=srid)), srid)
+    if not pygeos.is_valid(block).all(): block = pygeos.make_valid(block)
     if pygeos.get_num_geometries(block)[0] > 1:
         block = pygeos.get_parts(block)
         block = np.array([x for x in block if (pygeos.get_type_id(x) == 3 or pygeos.get_type_id(x) == 6)])
         block = np.array([pygeos.buffer(pygeos.multipolygons(pygeos.get_parts(block)),1)])
-        #block = pygeos.union_all(np.array([pygeos.buffer(pygeos.multipolygons(pygeos.get_parts(block)),1)]))
-        
-    country_code = block_data['country_code'].unique()[0] 
-    gadm_code = block_data['gadm_code'].unique()[0] 
-    block_area = round(pygeos.area(pygeos.multipolygons(pygeos.from_shapely(block_data['geometry']))),2)
-    bldg_array = pygeos.from_shapely(bldg_data['geometry'])
-    if not pygeos.is_valid(bldg_array).all(): bldg_array = pygeos.make_valid(bldg_array)
-    bldg_count = np.sum(pygeos.get_num_geometries(bldg_array))
+        if not pygeos.is_valid(block).all(): block = pygeos.make_valid(block)
+
+    # Check buildings geometry
+    if buildings.geom_type.unique().any() in ['MultiPoint','MultiPolygon']: buildings = buildings.explode(ignore_index=True)
+    if buildings.geom_type.unique().any() in ['Polygon']: buildings = buildings.centroid
+    assert buildings.geom_type.unique().all() in [None, 'Point'], 'building geometry is not a Point.'
+    buildings = pygeos.set_srid(pygeos.from_shapely(buildings.to_crs(epsg=srid)), srid)
+    if not pygeos.is_valid(buildings).all(): buildings = pygeos.make_valid(buildings)
+    buildings = buildings[np.isin(pygeos.get_type_id(buildings), [0,4])]
+    buildings = pygeos.multipoints(buildings)
+
     is_connected = False
 
-    if 'building_area' in bldg_data.columns:
-        bldg_area = round(sum(bldg_data['building_area']),2)
-    else:     
-        bldg_area_list = pygeos.area(bldg_array)
-        bldg_area = round(sum(bldg_area_list),2)
+    # Check street networks
+    if streets.geom_type.unique().any() in ['MultiLineString', 'LineString']:
+        streets = pygeos.set_srid(pygeos.from_shapely(streets.to_crs(epsg=srid)), srid)
+        if not pygeos.is_valid(streets).all(): streets = pygeos.make_valid(streets)
+        streets = streets[np.isin(pygeos.get_type_id(streets), [1,2,5])]
 
-    if bldg_count > 0:
-        gtypes = bldg_data['geometry'].geom_type.unique()
-        if len(gtypes) > 1 or gtypes[0] != 'Point':
-            bldg_data["geometry"] = bldg_data.centroid
-        building_points = pygeos.multipoints(pygeos.from_shapely(bldg_data["geometry"]))
-    else: 
-        building_points = pygeos.centroid(pygeos.union_all(block))
-    if not pygeos.is_valid(building_points).all(): building_points = pygeos.make_valid(building_points)
-
-    if street_linestrings is not None:
-        if type(street_linestrings) == gpd.geodataframe.GeoDataFrame:    
-            street_linestrings = from_shapely_srid(geometry = street_linestrings, srid = 3395)
-        assert type(street_linestrings) == np.ndarray and any(pygeos.is_geometry(street_linestrings)), 'street_linestrings is an invalid geometry type.'
-        street_linestrings = street_linestrings[np.isin(pygeos.get_type_id(street_linestrings), [1,2,5])]
-        if np.unique(pygeos.get_srid(street_linestrings))[0] == 4326:
-            street_linestrings = transform_crs(geometry = street_linestrings, epsg_from = "EPSG:4326", epsg_to = "EPSG:3395")
-        assert len(np.unique(pygeos.get_srid(street_linestrings))) == 1 and np.unique(pygeos.get_srid(street_linestrings))[0] == 3395, 'street_linestrings is not epsg:4326 or epsg:3395.' 
-        street_multilinestrings = pygeos.multilinestrings(street_linestrings)
+        street_multilinestrings = pygeos.multilinestrings(pygeos.get_parts(streets))
         if not pygeos.is_valid(street_multilinestrings).all(): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
         street_multilinestrings = pygeos.intersection(street_multilinestrings, block)
         if not pygeos.is_valid(street_multilinestrings).all(): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
 
-        if pygeos.intersects(block, street_multilinestrings): 
+        if pygeos.intersects(block, street_multilinestrings).any(): 
             nearest_external_street = 0
         else: 
-            nearest_external_street = pygeos.distance(pygeos.centroid(building_points), pygeos.extract_unique_points(pygeos.multilinestrings(street_linestrings)))
+            nearest_external_street = pygeos.distance(pygeos.centroid(buildings), pygeos.extract_unique_points(pygeos.multilinestrings(pygeos.get_parts(streets))))
 
-        assert len(street_multilinestrings) == 1, 'street_linestrings not formatted as single geometry.'
-        if not pygeos.is_empty(street_multilinestrings[0]):
+        if not pygeos.is_empty(street_multilinestrings).all():
+            
             street_multilinestrings = pygeos.line_merge(street_multilinestrings)
             if not pygeos.is_valid(street_multilinestrings).all(): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
             internal_buffer = pygeos.buffer(street_multilinestrings, radius=buffer_radius/2)
-            external_buffer = pygeos.buffer(pygeos.get_exterior_ring(block), radius=buffer_radius)
             if not pygeos.is_valid(internal_buffer).all(): internal_buffer= pygeos.make_valid(internal_buffer)
+            external_buffer = pygeos.buffer(pygeos.get_exterior_ring(block), radius=buffer_radius)
             if not pygeos.is_valid(external_buffer).all(): external_buffer= pygeos.make_valid(external_buffer)
+
             complete_buffer = pygeos.get_parts(pygeos.union(internal_buffer, external_buffer))
-            if not pygeos.is_valid(street_linestrings).all(): street_linestrings = pygeos.make_valid(street_linestrings)
-            exterior_access = street_linestrings[pygeos.intersects(street_linestrings, external_buffer)]
-            complete_buffer = complete_buffer[pygeos.intersects(complete_buffer, pygeos.multilinestrings(exterior_access))]
-            complete_buffer = pygeos.union_all(complete_buffer)
+            exterior_access = streets[pygeos.intersects(streets, external_buffer)]
+            complete_buffer = complete_buffer[pygeos.intersects(complete_buffer, pygeos.multilinestrings(pygeos.get_parts(exterior_access)))]
+            
+            # Complete buffer is geometry covering streets connected to exterior
+            complete_buffer = pygeos.union_all(complete_buffer) 
             if not pygeos.is_valid(complete_buffer).all(): complete_buffer = pygeos.make_valid(complete_buffer)
+
             off_network_geometry = pygeos.difference(street_multilinestrings, complete_buffer)
-            # assert len(off_network_geometry) == 1, 'off_network_geometry more than .'
-            off_network_length = pygeos.length(off_network_geometry)[0]
+            off_network_length = sum(pygeos.length(off_network_geometry))
             on_network_geometry = pygeos.intersection(street_multilinestrings, complete_buffer)
-            # assert len(on_network_geometry) == 1, 'on_network_geometry unable to format as MultiLineString.'
-            on_network_length = pygeos.length(on_network_geometry)[0]
+            on_network_length = sum(pygeos.length(on_network_geometry))
             on_network_buffer = pygeos.buffer(on_network_geometry, radius = 1)
             if on_network_length > 0: 
                 is_connected = True
@@ -151,17 +120,18 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
             off_network_length = 0
     else:
         nearest_external_street = np.nan
-        on_network_length = np.nan
-        off_network_length = np.nan
+        on_network_length = 0
+        off_network_length = 0
 
+    # K-complexity calculation
+    bldg_count = np.sum(pygeos.get_num_geometries(buildings)) 
     if bldg_count not in [1,0]:
-        voronoi = pygeos.get_parts(pygeos.voronoi_polygons(geometry=building_points, extend_to=block))
-        if not pygeos.is_valid(block).all(): block = pygeos.make_valid(block)
+
+        voronoi = pygeos.get_parts(pygeos.voronoi_polygons(geometry=buildings, extend_to=block))
         if not pygeos.is_valid(voronoi).all(): voronoi = pygeos.make_valid(voronoi)
         block_parcels = pygeos.intersection(block, voronoi)  
         if not pygeos.is_valid(block_parcels).all(): block_parcels = pygeos.make_valid(block_parcels)  
         bldg_count = np.sum(pygeos.get_num_geometries(block_parcels))
-
         if is_connected is True:
             block_intersect = pygeos.intersects(on_network_buffer, block_parcels) 
             block_parcels_outer = block_parcels[block_intersect]
@@ -175,7 +145,6 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
             block_parcels_outer = block_parcels.copy()
 
         parcel_residual = np.sum(pygeos.get_num_geometries(block_parcels))
-
         while parcel_residual > 0:
             try: block_reduced = pygeos.coverage_union_all(block_parcels_outer)
             except: block_reduced = pygeos.union_all(pygeos.make_valid(block_parcels_outer))
@@ -200,7 +169,7 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
             block_parcels = block_parcels_inner.copy()
             parcel_residual = np.sum(pygeos.get_num_geometries(block_parcels_inner))
             if parcel_residual == 0: 
-                block_layers.append( str(np.sum(pygeos.get_num_geometries(block_parcels_outer))))
+                block_layers.append(str(np.sum(pygeos.get_num_geometries(block_parcels_outer))))
                 block_depth = len(block_layers)
                 break
             block_layers.append( str(np.sum(pygeos.get_num_geometries(block_parcels_outer))))
@@ -212,119 +181,122 @@ def compute_k(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_
         block_depth = len(block_layers)
 
     if include_geometry is True:
-        data = gpd.GeoDataFrame.from_dict({'block_id': [block_id], 'gadm_code': gadm_code, 'country_code': country_code, 'block_area': float(block_area), 'on_network_street_length': float(on_network_length), 'off_network_street_length': float(off_network_length), 'nearest_external_street': float(nearest_external_street), 'building_area': float(bldg_area), 'building_count': int(bldg_count), 'building_layers': ','.join(block_layers), 'k_complexity': int(block_depth), 'geometry': block_data['geometry']}).set_crs(epsg=3395)
+        data = gpd.GeoDataFrame.from_dict({'block_id': [block_id], 'on_network_street_length': float(on_network_length), 'off_network_street_length': float(off_network_length), 'nearest_external_street': float(nearest_external_street), 'building_count': int(bldg_count), 'building_layers': ','.join(block_layers), 'k_complexity': int(block_depth), 'geometry': gpd.GeoSeries(pygeos.to_shapely(block))}).set_crs(epsg=srid)
         data = data.to_crs(4326)
     else:
-        data = pd.DataFrame.from_dict({'block_id': [block_id], 'gadm_code': gadm_code, 'country_code': country_code, 'block_area': float(block_area), 'on_network_street_length': float(on_network_length), 'off_network_street_length': float(off_network_length), 'nearest_external_street': float(nearest_external_street), 'building_area': float(bldg_area), 'building_count': int(bldg_count), 'building_layers': ','.join(block_layers), 'k_complexity': int(block_depth)})
+        data = pd.DataFrame.from_dict({'block_id': [block_id], 'on_network_street_length': float(on_network_length), 'off_network_street_length': float(off_network_length), 'nearest_external_street': float(nearest_external_street), 'building_count': int(bldg_count), 'building_layers': ','.join(block_layers), 'k_complexity': int(block_depth)})
     return data
 
-
-def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, bldg_data: gpd.GeoDataFrame, street_linestrings: Union[pygeos.Geometry, gpd.GeoDataFrame] = None, use_building_polygons: bool = True, buffer_radius: float = 100, shrink_value: float = 0.1, segment_value: float = 0.5, threshold_value: float = 0.01) -> gpd.GeoDataFrame:
+def compute_layers(block_id: str, block: gpd.GeoSeries, buildings: gpd.GeoSeries, streets: gpd.GeoSeries, use_building_polygons: bool = False, buffer_radius: float = 100, srid: int = 3395, shrink_value: float = 0.4, segment_value: float = 0.5, threshold_value: float = 0.01) -> gpd.GeoDataFrame:
     """
-    Computes the k-complexity value for each layer of buildings within a block taking a GeoDataFrame of enclosed blocks, 
-    the indexed building GeoDataFrame, and street linestrings in the form of a PyGEOS Geometry (or GeoDataFrame with slower performance). 
+    Computes the k-complexity value for each layer of buildings within an enclosed block.
     Differs from compute_k() because provides a detailed rendering of the internal layers of building access.
     Args:
-        block_id: string, unique identification code of block_id string in block_col
-        block_col: string, column that contains the block_id codes (present in block_data and bldg_data)
-        block_data: GeoDataFrame, output returned from build_blocks() function, requires CRS 4326 or 3395 
-        bldg_data: GeoDataFrame, GeoDataFrame, requires CRS 4326 or 3395, must contain block_col containing block_id
-        street_linestrings: GeoDataFrame or PyGEOS Geometry array (optional), linestrings representing street accesses, requires CRS 4326 or 3395
-        use_building_polygons: bool (optional), contour parcels around input polygon bldg_data, otherwise defaults to points
+        block_id: string, unique identification code
+        block: GeoSeries of a single Polygon representing enclosed block
+        buildings: GeoSeries of Points or Polygons representing buildings
+        streets: GeoSeries of Linestrings or MultiLinestrings representing street networks
+        use_building_polygons: bool (optional), defaults to False to use default triangular voronoi. Set to True to contour parcels around building polygons (slower performance).
         buffer_radius: float (optional), extends disconnected street_linestrings to street network that are within a set tolerance in meters
+        srid: integer (optional), defaults to 3395, representing spatial reference identifier, for meter conversion
         For info about shrink_value, segment_value, threshold_value see: http://docs.momepy.org/en/stable/generated/momepy.Tessellation.html
     Returns:
-        GeoDataFrame with block-layer geometries and the columns: 'block_id', 'gadm_code', 'country_code', 'block_property', 'building_count', 'k_complexity', 'geometry'
-        Geometry projected in CRS 4326.        
+        GeoDataFrame with building-parcel and street geometries. Geometry output projected in CRS 4326.
     """
-    assert block_data.crs in ['epsg:3395','epsg:4326'], "block_data is not epsg:4326 or epsg:3395."
-    assert bldg_data.crs in ['epsg:3395','epsg:4326'], "bldg_data  is not epsg:4326 or epsg:3395."
-    if block_data.crs == 'epsg:4326': block_data = block_data.to_crs(epsg=3395)
-    if bldg_data.crs == 'epsg:4326': bldg_data = bldg_data.to_crs(epsg=3395)
-    
     block_layers = [] 
     block_layers_geometry = []
-    k_complexity = []
-    
-    bldg_data = bldg_data.loc[bldg_data[block_col] == block_id].copy() 
-    block_data = block_data.loc[block_data[block_col] == block_id].copy() 
-    assert block_data.shape[0] == 1, 'block_id is not unique.'
-    block = pygeos.from_shapely(block_data['geometry'])
+    on_network_geometry = pygeos.Geometry("LINESTRING EMPTY")
+    off_network_geometry = pygeos.Geometry("LINESTRING EMPTY")
+
+    data = gpd.GeoDataFrame.from_dict({
+        'block_id': pd.Series(dtype='str'), 
+        'block_property':  pd.Series(dtype='str'), 
+        'building_count': pd.Series(dtype='int'), 
+        'k_complexity': pd.Series(dtype='int'), 
+        'geometry': gpd.GeoSeries(dtype='geometry')
+    }).set_crs(epsg=srid)
+
+    # Check block geometry
+    assert block.geom_type.unique().all() == 'Polygon', 'block geometry is not a Polygon.'
+    block = pygeos.set_srid(pygeos.from_shapely(block.to_crs(epsg=srid)), srid)
     if not pygeos.is_valid(block).all(): block = pygeos.make_valid(block)
-    
     if pygeos.get_num_geometries(block)[0] > 1:
         block = pygeos.get_parts(block)
         block = np.array([x for x in block if (pygeos.get_type_id(x) == 3 or pygeos.get_type_id(x) == 6)])
         block = np.array([pygeos.buffer(pygeos.multipolygons(pygeos.get_parts(block)),1)])
+        if not pygeos.is_valid(block).all(): block = pygeos.make_valid(block)
 
-    country_code = block_data['country_code'].unique()[0] 
-    gadm_code = block_data['gadm_code'].unique()[0] 
-    bldg_array = pygeos.from_shapely(bldg_data['geometry'])
-    if not pygeos.is_valid(bldg_array).all(): bldg_array = pygeos.make_valid(bldg_array)
-    bldg_count = np.sum(pygeos.get_num_geometries(bldg_array))
+    # Check buildings geometry
+    buildings = pygeos.set_srid(pygeos.from_shapely(buildings.to_crs(epsg=srid)), srid)
+    buildings = buildings[np.isin(pygeos.get_type_id(buildings), [0,3,4,6])]
+    buildings = pygeos.get_parts(buildings)
+
+    if np.sum(pygeos.get_num_geometries(buildings)) > 0:
+        if use_building_polygons == False:
+            if np.isin(pygeos.get_type_id(buildings), [3]).any(): 
+                warnings.warn(f"Converting building Polygons to Points. Specify use_building_polygons = True to use Polygons.")
+                buildings = buildings.centroid
+            type_count = dict(collections.Counter(pygeos.get_type_id(buildings)))
+            assert type_count.get(0) > 0, 'No Points present in buildings geopandas.GeoSeries.'
+            buildings = buildings[np.isin(pygeos.get_type_id(buildings), [0])]
+            buildings = pygeos.multipoints(buildings)
+        else: 
+            type_count = dict(collections.Counter(pygeos.get_type_id(buildings)))
+            assert type_count.get(3) > 0, 'No Polygons present in buildings geopandas.GeoSeries.'
+            buildings = buildings[np.isin(pygeos.get_type_id(buildings), [3])]
+            buildings = pygeos.multipolygons(buildings)
+        
+    if not pygeos.is_valid(buildings).all(): buildings = pygeos.make_valid(buildings)
+
+    bldg_count = np.sum(pygeos.get_num_geometries(buildings))
     is_connected = False
-    off_network_length = 0 
-    on_network_length = 0 
 
-    if use_building_polygons == False:
-        if bldg_count > 0:
-            gtypes = bldg_data['geometry'].geom_type.unique()
-            if len(gtypes) > 1 or gtypes[0] != 'Point':
-                bldg_data["geometry"] = bldg_data.centroid
-            building_points = pygeos.multipoints(pygeos.from_shapely(bldg_data["geometry"]))
-        else: 
-            building_points = pygeos.centroid(pygeos.union_all(block))
-        if not pygeos.is_valid(building_points).all(): building_points = pygeos.make_valid(building_points)
-    else:
-        if bldg_count > 0:
-            building_polygons = bldg_data.copy()
-        else: 
-            building_polygons = pygeos.centroid(pygeos.union_all(block))
-        if not pygeos.is_valid(building_polygons).all(): building_polygons = pygeos.make_valid(building_polygons)
+    # Check street networks
+    if streets.geom_type.unique().any() in ['MultiLineString', 'LineString']:
+        streets = pygeos.set_srid(pygeos.from_shapely(streets.to_crs(epsg=srid)), srid)
+        if not pygeos.is_valid(streets).all(): streets = pygeos.make_valid(streets)
+        streets = streets[np.isin(pygeos.get_type_id(streets), [1,2,5])]
 
-    if street_linestrings is not None:
-        if type(street_linestrings) == gpd.geodataframe.GeoDataFrame:    
-            street_linestrings = from_shapely_srid(geometry = street_linestrings, srid = 3395)
-        assert type(street_linestrings) == np.ndarray and any(pygeos.is_geometry(street_linestrings)), 'street_linestrings is an invalid geometry type.'
-        street_linestrings = street_linestrings[np.isin(pygeos.get_type_id(street_linestrings), [1,2,5])]
-        if np.unique(pygeos.get_srid(street_linestrings))[0] == 4326:
-            street_linestrings = transform_crs(geometry = street_linestrings, epsg_from = "EPSG:4326", epsg_to = "EPSG:3395")
-        assert len(np.unique(pygeos.get_srid(street_linestrings))) == 1 and np.unique(pygeos.get_srid(street_linestrings))[0] == 3395, 'street_linestrings is not epsg:4326 or epsg:3395.'     
-        street_multilinestrings = pygeos.multilinestrings(street_linestrings)
+        street_multilinestrings = pygeos.multilinestrings(pygeos.get_parts(streets))
         if not pygeos.is_valid(street_multilinestrings).all(): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
         street_multilinestrings = pygeos.intersection(street_multilinestrings, block)
         if not pygeos.is_valid(street_multilinestrings).all(): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
 
-        assert len(street_multilinestrings) == 1, 'street_linestrings not formatted as single geometry.'
-        if not pygeos.is_empty(street_multilinestrings[0]):
+        if not pygeos.is_empty(street_multilinestrings).all():
+            
             street_multilinestrings = pygeos.line_merge(street_multilinestrings)
             if not pygeos.is_valid(street_multilinestrings).all(): street_multilinestrings = pygeos.make_valid(street_multilinestrings)
-            internal_buffer = pygeos.buffer(street_multilinestrings, radius=(buffer_radius/2))
-            external_buffer = pygeos.buffer(pygeos.get_exterior_ring(block), radius=buffer_radius)
+            internal_buffer = pygeos.buffer(street_multilinestrings, radius=buffer_radius/2)
             if not pygeos.is_valid(internal_buffer).all(): internal_buffer= pygeos.make_valid(internal_buffer)
+            external_buffer = pygeos.buffer(pygeos.get_exterior_ring(block), radius=buffer_radius)
             if not pygeos.is_valid(external_buffer).all(): external_buffer= pygeos.make_valid(external_buffer)
+
             complete_buffer = pygeos.get_parts(pygeos.union(internal_buffer, external_buffer))
-            if not pygeos.is_valid(street_linestrings).all(): street_linestrings = pygeos.make_valid(street_linestrings)
-            exterior_access = street_linestrings[pygeos.intersects(street_linestrings, external_buffer)]
-            complete_buffer = complete_buffer[pygeos.intersects(complete_buffer, pygeos.multilinestrings(exterior_access))]
-            complete_buffer = pygeos.union_all(complete_buffer)
+            exterior_access = streets[pygeos.intersects(streets, external_buffer)]
+            complete_buffer = complete_buffer[pygeos.intersects(complete_buffer, pygeos.multilinestrings(pygeos.get_parts(exterior_access)))]
+            
+            # Complete buffer is geometry covering streets connected to exterior
+            complete_buffer = pygeos.union_all(complete_buffer) 
             if not pygeos.is_valid(complete_buffer).all(): complete_buffer = pygeos.make_valid(complete_buffer)
-            off_network_geometry = pygeos.difference(street_multilinestrings,complete_buffer)            
-            on_network_geometry = pygeos.intersection(street_multilinestrings,complete_buffer)
+
+            off_network_geometry = pygeos.difference(street_multilinestrings, complete_buffer)
+            on_network_geometry = pygeos.intersection(street_multilinestrings, complete_buffer)
             on_network_buffer = pygeos.buffer(on_network_geometry, radius = 1)
-            off_network_length = pygeos.length(off_network_geometry)[0]
-            on_network_length = pygeos.length(on_network_geometry)[0]
-            if on_network_length > 0: 
+            if sum(pygeos.length(on_network_geometry)) > 0: 
                 is_connected = True
     
     if bldg_count not in [1,0]:
 
         if use_building_polygons == True:
-            building_polygons['bldg_id'] = momepy.unique_id(building_polygons)
-            enclosed_tess = momepy.Tessellation(gdf=building_polygons, unique_id='bldg_id', enclosures=block_data, enclosure_id='block_id', shrink = shrink_value, segment = segment_value, threshold = threshold_value).tessellation
+            buildings_gdf = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(pygeos.to_shapely(buildings)) }).set_crs(epsg=srid)
+            buildings_gdf = buildings_gdf.assign(index_id = buildings_gdf.index.astype(int))
+            buildings_gdf['index_id'] = momepy.unique_id(buildings_gdf)
+            block_gdf = gpd.GeoDataFrame.from_dict({'geometry': gpd.GeoSeries(pygeos.to_shapely(block)) }).set_crs(epsg=srid)
+            buildings_gdf = buildings_gdf.assign(block_id = block_id.astype(str))
+            enclosed_tess = momepy.Tessellation(gdf=buildings_gdf, unique_id='index_id', enclosures=block_gdf, enclosure_id='block_id', shrink = shrink_value, segment = segment_value, threshold = threshold_value).tessellation
             voronoi = pygeos.get_parts(pygeos.from_shapely(enclosed_tess['geometry']))
         else:
-            voronoi = pygeos.get_parts(pygeos.voronoi_polygons(geometry=building_points, extend_to=block))
+            voronoi = pygeos.get_parts(pygeos.voronoi_polygons(geometry=buildings, extend_to=block))
 
         if not pygeos.is_valid(block).all(): block = pygeos.make_valid(block)
         if not pygeos.is_valid(voronoi).all(): voronoi = pygeos.make_valid(voronoi)
@@ -336,11 +308,16 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
             block_intersect = pygeos.intersects(on_network_buffer, block_parcels)
             block_parcels_outer = block_parcels[block_intersect]
             block_layers.append(np.sum(pygeos.get_num_geometries(block_parcels_outer)))
-            block_layers_geometry.append(pygeos.geometrycollections(block_parcels_outer))
+            #block_layers_geometry.append(pygeos.geometrycollections(block_parcels_outer))
             block_depth = len(block_layers)
-            k_complexity.append(block_depth)
+            block_layers_geometry = pygeos.multipolygons(pygeos.get_parts(block_parcels_outer))
+            building_count = np.sum(pygeos.get_num_geometries(block_parcels_outer))
+            data_layer = gpd.GeoDataFrame.from_dict({'block_id': block_id, 'block_property': 'building-parcels', 'building_count': building_count, 'k_complexity': block_depth, 'geometry':  gpd.GeoSeries(pygeos.to_shapely(block_layers_geometry))}).set_crs(epsg=srid)
+            data = pd.concat([data, data_layer])
+
             block_parcels = block_parcels[~block_intersect]
             if not pygeos.is_valid(block_parcels).all(): block_parcels = pygeos.make_valid(block_parcels)
+            
             if len(block_parcels_outer) == 0: 
                 block_parcels_outer = block_parcels.copy()
         else: 
@@ -369,43 +346,32 @@ def compute_layers(block_id: str, block_col: str, block_data: gpd.GeoDataFrame, 
             parcel_residual = np.sum(pygeos.get_num_geometries(block_parcels_inner))
             if parcel_residual == 0: 
                 block_layers.append(np.sum(pygeos.get_num_geometries(block_parcels_outer)))
-                block_layers_geometry.append(pygeos.geometrycollections(block_parcels_outer))
                 block_depth = len(block_layers)
-                k_complexity.append(block_depth)
+                block_layers_geometry = pygeos.multipolygons(pygeos.get_parts(block_parcels_outer))
+                building_count = np.sum(pygeos.get_num_geometries(block_parcels_outer))
+                data_layer = gpd.GeoDataFrame.from_dict({'block_id': block_id, 'block_property': 'building-parcels', 'building_count': building_count, 'k_complexity': block_depth, 'geometry': gpd.GeoSeries(pygeos.to_shapely(block_layers_geometry)) }).set_crs(epsg=srid)
+                data = pd.concat([data, data_layer])
                 break
             block_layers.append(np.sum(pygeos.get_num_geometries(block_parcels_outer)))
-            block_layers_geometry.append(pygeos.geometrycollections(block_parcels_outer))
-            k_complexity.append(len(block_layers))
-        #else:
-            #block_layers.append(np.sum(pygeos.get_num_geometries(block_parcels_outer)))
-            #block_layers_geometry.append(pygeos.geometrycollections(block_parcels_outer))
-            #k_complexity.append(len(block_layers))
+            block_depth = len(block_layers)
+            block_layers_geometry = pygeos.multipolygons(pygeos.get_parts(block_parcels_outer))
+            building_count = np.sum(pygeos.get_num_geometries(block_parcels_outer))
+            data_layer = gpd.GeoDataFrame.from_dict({'block_id': block_id, 'block_property': 'building-parcels', 'building_count': building_count, 'k_complexity': block_depth, 'geometry': gpd.GeoSeries(pygeos.to_shapely(block_layers_geometry)) }).set_crs(epsg=srid)
+            data = pd.concat([data, data_layer])
     else:
         block_layers.append(bldg_count)
-        block_layers_geometry.append(pygeos.union_all(block))
-        k_complexity.append(len(block_layers))
+        block_depth = len(block_layers)
+        block_layers_geometry = pygeos.multipolygons(pygeos.get_parts(block))
+        data_layer = gpd.GeoDataFrame.from_dict({'block_id': block_id, 'block_property': 'building-parcels', 'building_count': bldg_count, 'k_complexity': block_depth, 'geometry':  gpd.GeoSeries(pygeos.to_shapely(block_layers_geometry)) }).set_crs(epsg=srid)
+        data = pd.concat([data, data_layer])
 
-    data = gpd.GeoDataFrame.from_dict({'block_id': block_id, 'gadm_code': gadm_code, 'country_code': country_code, 'block_property': 'building-parcels', 'building_count': block_layers, 'k_complexity': k_complexity, 'geometry': pygeos.to_shapely(block_layers_geometry)}).set_crs(epsg=3395)
-    if on_network_length > 0:
-        lines = gpd.GeoDataFrame.from_dict({'block_id': block_id, 'gadm_code': gadm_code, 'country_code': country_code, 'block_property': 'on-network-streets', 'building_count': np.nan, 'k_complexity': np.nan, 'geometry': pygeos.to_shapely(on_network_geometry)}).set_crs(epsg=3395)
+    if not pygeos.is_empty(on_network_geometry).all():
+        lines = gpd.GeoDataFrame.from_dict({'block_id': block_id, 'block_property': 'on-network-streets', 'building_count': np.nan, 'k_complexity': np.nan, 'geometry':  gpd.GeoSeries(pygeos.to_shapely(pygeos.multilinestrings(pygeos.get_parts(on_network_geometry)))) }).set_crs(epsg=srid)
         data = pd.concat([data, lines])
-    if off_network_length > 0:
-        lines = gpd.GeoDataFrame.from_dict({'block_id': block_id, 'gadm_code': gadm_code, 'country_code': country_code, 'block_property': 'off-network-streets', 'building_count': np.nan, 'k_complexity': np.nan, 'geometry': pygeos.to_shapely(off_network_geometry)}).set_crs(epsg=3395)
+    if not pygeos.is_empty(off_network_geometry).all():
+        lines = gpd.GeoDataFrame.from_dict({'block_id': block_id, 'block_property': 'off-network-streets', 'building_count': np.nan, 'k_complexity': np.nan, 'geometry':  gpd.GeoSeries(pygeos.to_shapely(pygeos.multilinestrings(pygeos.get_parts(off_network_geometry)))) }).set_crs(epsg=srid)
         data = pd.concat([data, lines])
     data = data.to_crs(4326)
-    return data
-
-
-def from_shapely_srid(geometry: gpd.GeoDataFrame, srid: int) -> pygeos.Geometry:
-    """
-    Transform GeoDataFrame to a PyGEOS Geometry array and set spatial reference identifier (SRID).
-    Args:
-        geometry: GeoSeries or GeoDataFrame 
-        srid: integer representing spatial reference identifier (i.e., 4326)
-    Returns:
-        PyGEOS Geometry array
-    """
-    data = pygeos.set_srid(pygeos.from_shapely(geometry['geometry'].to_crs(epsg=srid)), srid)
     return data
 
 def weighted_qcut(values, weights, q, **kwargs):
@@ -506,10 +472,10 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         country_buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_points_{country_code}.parquet')
         block_id_universe_buildings = country_buildings[['block_id']]   
         block_id_universe_buildings = block_id_universe_buildings.drop_duplicates()
-
         block_id_universe_buildings = block_id_universe_buildings.assign(buildings_present=int(1))
         block_id_universe = pd.merge(left = block_id_universe, right = block_id_universe_buildings, how='left', on='block_id')
         block_id_universe['buildings_present'] = block_id_universe['buildings_present'].fillna(0)
+        del block_id_universe_buildings
         
         # Remove completed blocks
         dask_folder_exists = os.path.isdir(Path(dask_dir) / f'{country_code}.parquet')
@@ -524,11 +490,11 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
                 block_id_universe['completed'] = block_id_universe['completed'].fillna(0)
                 country_buildings = country_buildings[~country_buildings['block_id'].isin(completed_block_list)]
                 logging.info(f"Completed blocks: {len(completed_block_list)} {round(len(completed_block_list)/block_id_universe.shape[0],2)*100} %")
-                del completed_blocks
+                del completed_blocks, completed_block_list, block_id_universe_completed
             else:
-                block_id_universe['completed'] = block_id_universe['completed'].assign(completed=int(0)) 
+                block_id_universe = block_id_universe.assign(completed=int(0)) 
         else:
-            block_id_universe['completed'] = block_id_universe['completed'].assign(completed=int(0)) 
+            block_id_universe = block_id_universe.assign(completed=int(0)) 
 
         # Reconcile buildings and completed blocks with full universe
         logging.info(f"Blocks total: {block_id_universe.shape[0]}")
@@ -548,88 +514,78 @@ def main(log_file: Path, country_chunk: list, chunk_size: int, core_count: int, 
         buildings_count['partition_index'] = weighted_qcut(buildings_count['block_id'], buildings_count['counts'], cuts, labels=False)
         chunk_dict = buildings_count[['block_id','partition_index']].drop_duplicates().reset_index(drop = True).groupby('partition_index')['block_id'].apply(list).to_dict()
         logging.info(f'Number of partitions: {len(chunk_dict)}')
-        del country_buildings, cuts, buildings_count
+        del country_buildings, cuts, buildings_count, block_id_universe, block_list
+        gc.collect()
         
         # Read in streets
-        streets = gpd.read_parquet(path = Path(streets_dir) / f'streets_{country_code}.parquet', memory_map = True).to_crs(3395)
-        streets = streets[streets['geometry'].notnull()].to_crs(3395)
-        streets = from_shapely_srid(geometry = streets, srid = 3395)
+        streets = gpd.read_parquet(path = Path(streets_dir) / f'streets_{country_code}.parquet', memory_map = True).to_crs(4326)
+        streets = streets[streets['geometry'].notnull()]
 
-        # Initial multiprocessing pool
-        #if number_of_cores > 1: 
-        #    pool = multiprocessing.Pool(processes = number_of_cores, maxtasksperchild = 100) 
-        
         # Loop over the chunks
         for i in chunk_dict.items():
 
             chunk_list = i[1]
             
             logging.info(f"Node status: {mem_profile_detail()}")
-            #logging.info(f"Uncollectable garbage: {gc.garbage}")
-            #logging.info(f"Garbage stats: {gc.get_stats()}")
+            logging.info(f"Partition {i[0]} of {len(chunk_dict)}")
             logging.info(f"Blocks in chunk: {len(chunk_list)}")
 
             # Read in block data within chunk
             try:
-                blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True, filters = [('block_id', 'in', chunk_list)]).to_crs(3395)
+                blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True, filters = [('block_id', 'in', chunk_list)]).to_crs(4326)
+                blocks = blocks[['block_id', 'block_geohash', 'gadm_code', 'country_code', 'geometry']]
             except Warning:
-                logging.info(f"Warning: No block data available for: {chunk_list}")
+                logging.warning(f"Warning: No block data available for: {chunk_list}")
+
             logging.info(f"GADMs in chunk: {blocks['gadm_code'].unique()}")
             logging.info(f"Geohashes in chunk: {blocks['block_geohash'].str.slice(start=0, stop=4).unique()}")
             
             # Read in streets and limit to streets that intersect chunk
             try:
-                street_zone = pygeos.buffer(pygeos.convex_hull(pygeos.union_all(pygeos.envelope(pygeos.from_shapely(blocks['geometry'])))), radius = 1000)
-                street_network = streets[pygeos.intersects(street_zone, streets)]
-                del street_zone
-                if len(street_network) == 0:
-                    street_network = streets.copy()
+                blocks_buffered = blocks[['block_id','geometry']].copy()
+                # Buffer set to 100 - is upper bound for nearest_external_street value in compute_k()
+                blocks_buffered['geometry'] = blocks_buffered['geometry'].to_crs(3395).buffer(100).to_crs(4326)
+                street_network = gpd.overlay(df1 = streets, df2 = blocks_buffered, how='intersection', keep_geom_type=True, make_valid=True)
+                street_network = street_network[['block_id', 'geometry']]
+                del blocks_buffered
             except Warning:
-                logging.info(f"Warning: No street data available for: {chunk_list}")
+                logging.warning(f"Warning: No street data available for: {chunk_list}")
 
             # Read in buildings within chunk
             try:
-                buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_points_{country_code}.parquet', memory_map = True, filters = [('block_id', 'in', chunk_list)]).to_crs(3395)
+                buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_points_{country_code}.parquet', memory_map = True, filters = [('block_id', 'in', chunk_list)]).to_crs(4326)
             except Warning:
-                logging.info(f"Warning: No building data available for: {chunk_list}")
+                logging.warning(f"Warning: No building data available for: {chunk_list}")
             logging.info(f"Buildings in chunk: {buildings.shape[0]}")
-                
-            # Spatial join of buildings to blocks            
-            buildings = buildings.to_crs(3395)
-            parallel_block_list = list(blocks['block_id'].unique())
-            
-            k_output = pd.DataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'block_area': pd.Series(dtype='float'), 'on_network_street_length': pd.Series(dtype='float'),  'off_network_street_length': pd.Series(dtype='float'), 'nearest_external_street': pd.Series(dtype='float'), 'building_area': pd.Series(dtype='float'), 'building_count': pd.Series(dtype='int'), 'building_layers': pd.Series(dtype='object'), 'k_complexity': pd.Series(dtype='int')})    
 
-            # Parallelize block computation of k and related metrics
-            if number_of_cores > 1: 
-                pool = multiprocessing.Pool(processes = number_of_cores, maxtasksperchild = 100) 
-                k_chunk = pool.map(functools.partial(compute_k, block_col = 'block_id', block_data = blocks, bldg_data = buildings, street_linestrings = street_network, buffer_radius = 60, include_geometry = False), parallel_block_list)
-                pool.close() 
-                pool.join()
-                for i,j in enumerate(k_chunk): k_output = pd.concat([k_output, k_chunk[i]], ignore_index=True)
-            else: 
-                k_chunk = list(map(lambda x: compute_k(block_id = x, block_col = 'block_id', block_data = blocks, bldg_data = buildings, street_linestrings = street_network, buffer_radius = 60, include_geometry = False), parallel_block_list))
-                for i,j in enumerate(k_chunk): k_output = pd.concat([k_output, k_chunk[i]], ignore_index=True)
+            # Initialize dataframe  
+            k_output = pd.DataFrame({
+                'block_id': pd.Series(dtype='str'), 
+                'on_network_street_length': pd.Series(dtype='float'),  
+                'off_network_street_length': pd.Series(dtype='float'), 
+                'nearest_external_street': pd.Series(dtype='float'), 
+                'building_count': pd.Series(dtype='int'), 
+                'building_layers': pd.Series(dtype='object'), 
+                'k_complexity': pd.Series(dtype='int')
+            })   
+
+            # Generate inputs to prevent copying data across workers
+            inputs = inputs_generator(block_id_col = 'block_id', blocks = blocks, buildings = buildings, streets = street_network)
+
+            # Parallelize computation
+            with multiprocessing.Pool(processes = number_of_cores, maxtasksperchild = 100) as pool:
+                results = pool.starmap(func = compute_k, iterable = inputs, chunksize = 10)
+            for i in results: k_output = pd.concat([k_output, i])
 
             # Incremental file build
             k_output = dask.dataframe.from_pandas(data = k_output, npartitions = 1) 
             dask.dataframe.to_parquet(df = k_output, path = Path(dask_dir) / f'{country_code}.parquet', engine='pyarrow', compression='snappy', append=True, ignore_divisions=True)
-            del pool, blocks, street_network, buildings, k_output, k_chunk 
-            gc.collect()
-
-            ## Parallelize layer computation
-            #k_layers = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'block_property': pd.Series(dtype='str'), 'building_count': pd.Series(dtype='int'), 'k_complexity': pd.Series(dtype='int'), 'geometry': gpd.GeoSeries()})
-            #pool = multiprocessing.Pool(processes= number_of_cores) 
-            #output = pool.map(functools.partial(compute_layers, block_col = 'block_id', block_data = blocks, bldg_data = buildings, street_linestrings = street_network, buffer_radius = 60), parallel_block_list)
-            #pool.close() 
-            #pool.join()
-            #for i,j in enumerate(output): k_layers = pd.concat([k_layers, output[i]], ignore_index=True)
+            del blocks, street_network, buildings, k_output, results
+            #gc.collect()
 
         # Combine partitioned dataframes into single parquet
         k_bulk = dask.dataframe.read_parquet(path = Path(dask_dir) / f'{country_code}.parquet').compute()
         k_bulk.to_parquet(path = Path(complexity_dir) / f'complexity_{country_code}.parquet')
-
-        #k_layers.to_parquet(path = Path(complexity_dir) / f'complexity_{country_code}_layers.parquet')
 
         t1_country = time.time()
         logging.info(f"Finished: {country_code}, {str(round((t1_country-t0_country)/60,3))} minutes")
@@ -651,7 +607,3 @@ def setup(args=None):
 
 if __name__ == "__main__":
     main(**vars(setup()))
-
-
-
-

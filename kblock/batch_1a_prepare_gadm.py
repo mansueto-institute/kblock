@@ -138,7 +138,7 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
         raise ValueError(f'GADM input data does not exist for {in_chunk_not_in_gadm_inputs} in country_chunk argument.')
 
     # Consolidate GADM data into one file
-    all_gadm_gpd = gpd.GeoDataFrame({'GID_0': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
+    all_gadm_gpd = gpd.GeoDataFrame({'GID_0': pd.Series(dtype='str'), 'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326) 
     for country_code in gadm_input_list: 
         gadm_gpd = gpd.read_file(Path(gadm_dir) / f'gadm_{country_code}.geojson')
         gadm_gpd = gadm_gpd[['GID_0', 'geometry']]
@@ -292,7 +292,7 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, daylight_dir: Path
     logging.info(f"Consolidating countries.")
     gadm_output_list = list(filter(re.compile("gadm_").match, sorted(list(os.listdir(Path(gadm_output_dir))))))
     gadm_output_list = [(re.sub('gadm_', '', re.sub('.parquet', '', i))) for i in gadm_output_list] 
-    gadm_combo = gpd.GeoDataFrame({'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
+    gadm_combo = gpd.GeoDataFrame({'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326) 
     for country_code in gadm_output_list: 
         gadm_clean = gpd.read_parquet(Path(gadm_output_dir) / f'gadm_{country_code}.parquet')
         gadm_combo = pd.concat([gadm_combo, gadm_clean], ignore_index=True)   
