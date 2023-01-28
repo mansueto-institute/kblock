@@ -22,8 +22,8 @@ mkdir -p /project2/bettencourt/mnp/update/jobs/complexity_jobs
 
 log_file_arg=$working_directory/jobs/complexity_jobs/::COUNTRYCODE::.log
 country_chunk_arg=${country_chunk[@]}
-chunk_size_arg=40000
-core_count_arg=10
+chunk_size_arg=100000
+core_count_arg=20
 blocks_dir_arg=$working_directory/outputs/blocks
 streets_dir_arg=$working_directory/outputs/streets
 buildings_dir_arg=$working_directory/outputs/buildings/points

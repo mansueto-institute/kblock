@@ -73,8 +73,8 @@ def main(ghsl_file: Path, blocks_dir: Path, output_dir: Path):
     country_list = [(re.sub('blocks_', '', re.sub('.parquet', '', i))) for i in input_file_list]
     full_xwalk = pd.DataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'urban_id': pd.Series(dtype='float'), 'conurbation_id': pd.Series(dtype='float')})
 
-    region_delineations = gpd.GeoDataFrame({'urban_regional_layer_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326)
-    urban_delineations = gpd.GeoDataFrame({'urban_layer_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326)
+    region_delineations = gpd.GeoDataFrame({'urban_regional_layer_code': pd.Series(dtype='str'), 'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326)
+    urban_delineations = gpd.GeoDataFrame({'urban_layer_code': pd.Series(dtype='str'), 'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326)
 
     # Loop through countries
     for country_code in country_list:

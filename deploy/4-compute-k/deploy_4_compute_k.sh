@@ -1,6 +1,6 @@
 #!/bin/bash
 
-country_chunk=(ZAF) #SYC DJI COM STP LBR CPV
+country_chunk=(SYC) # ZAF SYC DJI COM STP LBR CPV
 
 working_directory=/Users/nm/Downloads/update
 

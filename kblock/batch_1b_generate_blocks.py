@@ -332,7 +332,7 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
         gadm_list = list(gadm_gpd['gadm_code'].unique())
         
         # Initialize GeoDataFrame
-        block_bulk = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'block_geohash': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
+        block_bulk = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'block_geohash': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326) 
 
         # Build blocks for each GADM
         logging.info(f"Build blocks")
@@ -396,7 +396,7 @@ def main(log_file: Path, country_chunk: list, osm_dir: Path, gadm_dir: Path, out
     blocks_output_list = list(filter(re.compile("blocks_").match, sorted(list(os.listdir(Path(block_dir))))))
     blocks_output_list = [(re.sub('blocks_', '', re.sub('.parquet', '', i))) for i in blocks_output_list] 
     
-    all_blocks = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'block_geohash': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'block_area': pd.Series(dtype='float64'), 'block_perimeter': pd.Series(dtype='float64'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
+    all_blocks = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'block_geohash': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'block_area': pd.Series(dtype='float64'), 'block_perimeter': pd.Series(dtype='float64'), 'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326) 
     for country_code in blocks_output_list: 
         block_country = gpd.read_parquet(Path(block_dir) / f'blocks_{country_code}.parquet')
         all_blocks = pd.concat([all_blocks, block_country], ignore_index=True)   

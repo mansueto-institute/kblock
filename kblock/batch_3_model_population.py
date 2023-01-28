@@ -431,7 +431,7 @@ def main(log_file: Path, country_chunk: list, gadm_dir: Path, blocks_dir: Path, 
     logging.info(f"Remaining countries: {country_list}")
 
     # Consolidate GADM data into one file
-    all_gadm_gpd = gpd.GeoDataFrame({'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': pd.Series(dtype='geometry')}).set_crs(epsg=4326) 
+    all_gadm_gpd = gpd.GeoDataFrame({'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326) 
     for country_code in gadm_dir_list: 
         gadm_gpd = gpd.read_parquet(Path(gadm_dir) / f'gadm_{country_code}.parquet')
         gadm_gpd['country_code'] = country_code
