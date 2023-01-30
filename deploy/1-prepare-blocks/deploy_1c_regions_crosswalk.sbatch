@@ -20,7 +20,8 @@ log_file_arg=$working_directory/jobs/deploy_1c_regions_crosswalk.log
 country_chunk_arg=${iso_list[@]}
 africapolis_file_arg=$working_directory/inputs/africapolis/AFRICAPOLIS2020.gpkg
 ghsl_file_arg=$working_directory/inputs/ghsl/GHS_STAT_UCDB2015MT_GLOBE_R2019A_V1_2.gpkg
+gadm_dir_arg=$working_directory/inputs/gadm
 blocks_dir_arg=$working_directory/outputs/blocks
 output_dir_arg=$working_directory/outputs
 
-python batch_1c_regions_crosswalk.py --log_file $log_file_arg --country_chunk $country_chunk_arg --africapolis_file $africapolis_file_arg --ghsl_file $ghsl_file_arg --blocks_dir $blocks_dir_arg  --output_dir $output_dir_arg
+python batch_1c_regions_crosswalk.py --log_file $log_file_arg --country_chunk $country_chunk_arg --africapolis_file $africapolis_file_arg --ghsl_file $ghsl_file_arg --gadm_dir $gadm_dir_arg --blocks_dir $blocks_dir_arg  --output_dir $output_dir_arg
