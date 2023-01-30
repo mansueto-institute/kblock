@@ -1,5 +1,4 @@
 
-import pygeos
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -9,7 +8,6 @@ import re
 import os
 import shutil
 import logging
-from typing import Union
 from pathlib import Path
 import argparse
 import dask
@@ -17,8 +15,7 @@ import dask.dataframe
 import dask_geopandas
 import warnings; warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*')
 
-
-def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file: Path, blocks_dir: Path, output_dir: Path):
+def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file: Path, gadm_dir: Path, blocks_dir: Path, output_dir: Path):
 
     logging.basicConfig(filename=Path(log_file), format='%(asctime)s:%(message)s: ', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')
 
@@ -26,8 +23,11 @@ def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file:
     crosswalk_dir =  str(output_dir) + '/crosswalks'
     Path(crosswalk_dir).mkdir(parents=True, exist_ok=True)
     dask_dir =  str(output_dir) +  '/crosswalks' +  '/dask'
-    if os.path.isdir(dask_dir): shutil.rmtree(dask_dir)
-    Path(dask_dir).mkdir(parents=True, exist_ok=True)
+    if os.path.isdir(dask_dir): 
+        finished_countries_list = dask.dataframe.read_parquet(path = Path(dask_dir)).compute()
+        finished_countries_list = finished_countries_list['country_code'].unique()
+    else: 
+        Path(dask_dir).mkdir(parents=True, exist_ok=True)
 
     # Create list of countries based on block directory
     input_file_list = list(filter(re.compile("blocks_").match, sorted(list(os.listdir(Path(blocks_dir))))))
@@ -36,8 +36,9 @@ def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file:
     # Country chunk list
     if country_chunk: 
         country_list = [x for x in country_chunk if x in set(input_file_list)]
-        if not country_list: 
-            raise ValueError('No country files in directory.')
+        country_list = [x for x in country_list if x not in set(finished_countries_list)]
+        if not country_list and os.path.isfile(Path(crosswalk_dir) / f'urban_boundaries.gpkg'):
+            raise ValueError('No more files to process.')
     else: 
         raise ValueError('Empty country_chunk arg.')
     
@@ -102,8 +103,6 @@ def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file:
 
     logging.info(f'Input data prepared')
     full_xwalk = pd.DataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'urban_id': pd.Series(dtype='float'), 'conurbation_id': pd.Series(dtype='float')})
-
-    urban_delineations = gpd.GeoDataFrame({'urban_layer_code': pd.Series(dtype='str'), 'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326)
 
     # Loop through countries
     for country_code in country_list:
@@ -218,14 +217,6 @@ def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file:
         # Urban delineations
         blocks_xwalk['urban_layer_code'] = blocks_xwalk['country_code'] + '_' + blocks_xwalk['conurbation_id'] + '_' + blocks_xwalk['urban_id']
         blocks_xwalk['urban_layer_code'] = blocks_xwalk['urban_layer_code'].fillna(blocks_xwalk['country_code'] + '_nonurban')
-
-        urban_boundary = blocks_xwalk.copy()
-        urban_boundary['geometry'] = urban_boundary['geometry'].to_crs(3395).buffer(0.0001).to_crs(4326)
-        urban_boundary = dask_geopandas.from_geopandas(urban_boundary, npartitions = 10)
-        urban_boundary = urban_boundary.dissolve(by = 'urban_layer_code').compute()
-        urban_boundary.reset_index(inplace = True)
-        urban_boundary = urban_boundary[['urban_layer_code','geometry']]
-        urban_delineations = pd.concat([urban_delineations, urban_boundary], ignore_index=True)
 
         # Label with Africapolis
         blocks_africapolis = gpd.overlay(df1 = blocks, df2 = africapolis_data, how='intersection', keep_geom_type=True, make_valid=True)
@@ -377,20 +368,43 @@ def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file:
     assert full_xwalk[full_xwalk['block_id'].duplicated()].shape[0] == 0
     assert full_xwalk[full_xwalk['block_id'].isnull()].shape[0] == 0
     
-    urban_delineations_labels = full_xwalk[['urban_layer_code', 'country_code', 'country_name', 'area_type', 'class_urban_hierarchy', 'class_urban_periurban_nonurban', 'class_urban_nonurban', 'urban_id', 'urban_center_name', 'urban_country_code', 'urban_country_name', 'conurbation_id', 'conurbation_area_name', 'conurbation_area_name_short', 'conurbation_country_code', 'conurbation_country_name']]
-    urban_delineations_labels = urban_delineations_labels.drop_duplicates()
-    urban_delineations = urban_delineations.merge(urban_delineations_labels, on = 'urban_layer_code', how = 'left')
-    assert urban_delineations[urban_delineations['urban_layer_code'].duplicated()].shape[0] == 0
-
-    logging.info(f'Writing boundaries')
-    urban_delineations.to_parquet(path = Path(crosswalk_dir) / f'urban_boundaries.parquet')
-    urban_delineations.to_file(filename = Path(crosswalk_dir) / f'urban_boundaries.gpkg')
-
     # Write file to parquet CSV
     print('Writing files')
     logging.info(f'Writing crosswalk.')
     full_xwalk.to_parquet(path = Path(crosswalk_dir) / f'ghsl_crosswalk.parquet')
     full_xwalk.to_csv(Path(crosswalk_dir) / f'ghsl_crosswalk.csv')
+
+    # Aggregate boundaries
+    logging.info(f'Create aggregate boundaries')
+    urban_delineations_labels = full_xwalk[['urban_layer_code', 'country_code', 'country_name', 'area_type', 'class_urban_hierarchy', 'class_urban_periurban_nonurban', 'class_urban_nonurban', 'urban_id', 'urban_center_name', 'urban_country_code', 'urban_country_name', 'conurbation_id', 'conurbation_area_name', 'conurbation_area_name_short', 'conurbation_country_code', 'conurbation_country_name']]
+    urban_delineations_labels = urban_delineations_labels.drop_duplicates()
+    assert urban_delineations_labels[urban_delineations_labels['urban_layer_code'].duplicated()].shape[0] == 0
+
+    urban_delineations = gpd.GeoDataFrame({'urban_layer_code': pd.Series(dtype='str'), 'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326)
+    for country_code in full_xwalk['country_code'].unique():
+        blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True)
+        regions = gpd.read_parquet(path = Path(gadm_dir) / 'parquet' / f'gadm_{country_code}.parquet', memory_map = True)
+        regions = regions[['country_code','geometry']]
+        urban_boundary = pd.merge(blocks, full_xwalk[['block_id','urban_layer_code','area_type']], on = 'block_id', how = 'left')
+        urban_boundary = urban_boundary[urban_boundary['area_type'] != 'Non-urban']
+        urban_boundary = urban_boundary[['urban_layer_code','geometry']]
+        urban_boundary['geometry'] = urban_boundary['geometry'].to_crs(3395).buffer(0.0001).to_crs(4326)
+        urban_boundary = dask_geopandas.from_geopandas(urban_boundary, npartitions = 50)
+        urban_boundary = urban_boundary.dissolve(by = 'urban_layer_code').compute()
+        urban_boundary.reset_index(inplace = True)
+        regions = gpd.overlay(df1 = regions, df2 = urban_boundary[['geometry']], how = 'difference')
+        regions = dask_geopandas.from_geopandas(regions, npartitions = 50)
+        regions = regions.dissolve(by = 'country_code').compute()
+        regions.reset_index(inplace = True)
+        regions['urban_layer_code'] = regions['country_code'] + '_nonurban' + regions['country_code'] + '_nonurban' + regions['country_code']
+        regions = regions[['urban_layer_code','geometry']]
+        urban_boundary = pd.concat([urban_boundary, regions], ignore_index=True)
+        urban_boundary = urban_boundary.merge(urban_delineations_labels, on = 'urban_layer_code', how = 'left')
+        urban_delineations = pd.concat([urban_delineations, urban_boundary], ignore_index=True)
+    logging.info(f'Writing boundaries')
+    urban_delineations.to_parquet(path = Path(crosswalk_dir) / f'urban_boundaries.parquet')
+    urban_delineations.to_file(filename = Path(crosswalk_dir) / f'urban_boundaries.gpkg')
+
     logging.info(f'Finished.')
     print('Finished')
 
@@ -400,6 +414,7 @@ def setup(args=None):
     parser.add_argument('--country_chunk', required=False, type=str, dest="country_chunk", nargs='+', help="List of country codes following ISO 3166-1 alpha-3 format.")
     parser.add_argument('--africapolis_file', required=True, type=Path, dest="africapolis_file", help="Path to Africapolis file.")
     parser.add_argument('--ghsl_file', required=True, type=Path, dest="ghsl_file", help="Path to GHSL file.")
+    parser.add_argument('--gadm_dir', required=True, type=Path, dest="gadm_dir", help="Path to GADM directory.")
     parser.add_argument('--blocks_dir', required=True, type=Path, dest="blocks_dir", help="Path to blocks directory.")
     parser.add_argument('--output_dir', required=True, type=Path, dest="output_dir", help="Path to outputs directory.")
     return parser.parse_args(args)
