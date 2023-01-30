@@ -128,7 +128,11 @@ def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file:
         urban_centers_refined = blocks.merge(urban_centers_refined, how = 'inner', left_on=['block_id'], right_on = ['block_id'])
 
         # Dissolve blocks into urban areas
-        urban_centers_refined = urban_centers_refined[['urban_id','geometry']].dissolve(by=['urban_id'], as_index=False)
+        logging.info(f'Dissolving blocks into urban areas')
+        urban_centers_refined = urban_centers_refined[['urban_id','geometry']]
+        urban_centers_refined = dask_geopandas.from_geopandas(urban_centers_refined, npartitions = 50)
+        urban_centers_refined = urban_centers_refined.dissolve(by = 'urban_id').compute()
+        urban_centers_refined.reset_index(inplace = True)
         urban_centers_refined['geometry'] = urban_centers_refined['geometry'].make_valid()
 
         # Fine largest contiguous urban area
@@ -146,10 +150,13 @@ def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file:
         # Keep only largest contiguous urban area
         urban_centers_refined = urban_centers_refined[((urban_centers_refined['urban_center'] == 1) & (urban_centers_refined['area'] >= 1000000)) | (urban_centers_refined['rank'] == 1)]
         urban_centers_refined = urban_centers_refined[['urban_id','geometry']]
-        urban_centers_refined = urban_centers_refined.dissolve(by=['urban_id'], as_index=False)
+        urban_centers_refined = dask_geopandas.from_geopandas(urban_centers_refined, npartitions = 50)
+        urban_centers_refined = urban_centers_refined.dissolve(by = 'urban_id').compute()
+        urban_centers_refined.reset_index(inplace = True)
         urban_centers_refined['area_type'] = 'Urban'
 
         # Fit periurban areas to contiguous urban areas
+        logging.info(f'Differencing urban areas from conurbations')
         periurban_buffer_refined = gpd.overlay(df1 = conurbation_buffer, df2 = urban_centers_refined, how = 'difference')
         periurban_buffer_refined['urban_id'] = 'periurban_' + periurban_buffer_refined['conurbation_id']
         periurban_buffer_refined['area_type'] = 'Peri-urban'
@@ -186,7 +193,10 @@ def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file:
         # Restrict to contiguous periurban areas that intersect and urban area
         urban_periurban_blocks = urban_periurban_blocks[~urban_periurban_blocks['conurbation_id'].isna()]
         urban_periurban_blocks = blocks.merge(urban_periurban_blocks, how = 'inner', left_on=['block_id'], right_on = ['block_id'])
-        urban_periurban_contiguous = urban_periurban_blocks[['conurbation_id','geometry']].dissolve(by=['conurbation_id'], as_index=False)
+        urban_periurban_contiguous = urban_periurban_blocks[['conurbation_id','geometry']]
+        urban_periurban_contiguous = dask_geopandas.from_geopandas(urban_periurban_contiguous, npartitions = 50)
+        urban_periurban_contiguous = urban_periurban_contiguous.dissolve(by = 'conurbation_id').compute()
+        urban_periurban_contiguous.reset_index(inplace = True)
         urban_periurban_contiguous['geometry'] = urban_periurban_contiguous['geometry'].make_valid()
         urban_periurban_contiguous = urban_periurban_contiguous.explode(index_parts=False)
         urban_periurban_contiguous = urban_periurban_contiguous[urban_periurban_contiguous['geometry'].geom_type == 'Polygon']
@@ -207,6 +217,7 @@ def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file:
         urban_periurban_blocks = urban_periurban_blocks[['block_id','urban_id','area_type','conurbation_id']]
 
         # Merge with blocks
+        logging.info(f'Merging with blocks')
         blocks_xwalk = blocks.merge(urban_periurban_blocks, how = 'left', left_on=['block_id'], right_on = ['block_id'])
         blocks_xwalk['urban_id'] = blocks_xwalk['urban_id'].fillna('nonurban_' + blocks_xwalk['country_code'])
         blocks_xwalk['conurbation_id'] = blocks_xwalk['conurbation_id'].fillna('nonurban_' + blocks_xwalk['country_code'])
@@ -234,12 +245,13 @@ def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file:
         blocks_xwalk.to_file(filename = Path(dask_dir) / f'block_xwalk_{country_code}.gpkg')
         blocks_xwalk = blocks_xwalk[['block_id','block_geohash','gadm_code','country_code','urban_id','conurbation_id','area_type','urban_layer_code','agglosid', 'agglosname', 'metropole']]
 
+        logging.info(f'Writing to dask partition')
         blocks_xwalk = dask.dataframe.from_pandas(data = blocks_xwalk, npartitions = 1) 
         dask.dataframe.to_parquet(df = blocks_xwalk, path = Path(dask_dir) / f'crosswalks.parquet', engine='pyarrow', compression='snappy', append=True, ignore_divisions=True)
 
     # Read parquet data
 
-    print('Reading countries')
+    print('Preparing crosswalk')
     full_xwalk = dask.dataframe.read_parquet(path = Path(dask_dir)).compute()
 
     # Join GHSL data to crosswalk
@@ -382,6 +394,7 @@ def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file:
 
     urban_delineations = gpd.GeoDataFrame({'urban_layer_code': pd.Series(dtype='str'), 'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326)
     for country_code in full_xwalk['country_code'].unique():
+        logging.info(f'{country_code}')
         blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True)
         regions = gpd.read_parquet(path = Path(gadm_dir) / 'parquet' / f'gadm_{country_code}.parquet', memory_map = True)
         regions = regions[['country_code','geometry']]
@@ -389,10 +402,12 @@ def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file:
         urban_boundary = urban_boundary[urban_boundary['area_type'] != 'Non-urban']
         urban_boundary = urban_boundary[['urban_layer_code','geometry']]
         urban_boundary['geometry'] = urban_boundary['geometry'].to_crs(3395).buffer(0.0001).to_crs(4326)
+        logging.info(f'Dissolving urban boundaries')
         urban_boundary = dask_geopandas.from_geopandas(urban_boundary, npartitions = 50)
         urban_boundary = urban_boundary.dissolve(by = 'urban_layer_code').compute()
         urban_boundary.reset_index(inplace = True)
         regions = gpd.overlay(df1 = regions, df2 = urban_boundary[['geometry']], how = 'difference')
+        logging.info(f'Dissolving regions')
         regions = dask_geopandas.from_geopandas(regions, npartitions = 50)
         regions = regions.dissolve(by = 'country_code').compute()
         regions.reset_index(inplace = True)
