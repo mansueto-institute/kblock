@@ -19,7 +19,7 @@ iso_list=(AGO BDI BEN BFA BWA CAF CIV CMR COD COG COM CPV DJI ERI ESH ETH GAB GH
 
 working_directory=/project2/bettencourt/mnp/update/outputs
 
-log_file_arg=$working_directory/jobs/deploy_5_combine_data.log
+log_file_arg=/project2/bettencourt/mnp/update/jobs/deploy_5_combine_data.log
 country_chunk_arg=${iso_list[@]}
 blocks_dir_arg=$working_directory/blocks
 population_dir_arg=$working_directory/population
