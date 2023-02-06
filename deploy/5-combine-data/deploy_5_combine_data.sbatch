@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=deploy_deploy_5_combine_data
+#SBATCH --job-name=deploy_5_combine_data
 #SBATCH --partition=broadwl
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -8,7 +8,7 @@
 #SBATCH --output=/project2/bettencourt/mnp/update/jobs/deploy_5_combine_data.out
 #SBATCH --error=/project2/bettencourt/mnp/update/jobs/deploy_5_combine_data.err
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=nmarchio@uchicago.edu
+#SBATCH --mail-user=nmarchio@rcc.uchicago.edu
 #SBATCH --time=36:00:00
 #SBATCH --account=pi-bettencourt
 
