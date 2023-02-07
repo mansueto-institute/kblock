@@ -7,6 +7,7 @@ import momepy
 gpd.options.use_pygeos = True
 np.seterr(divide = 'ignore')
 
+import polars as pl
 import dask
 import dask.dataframe
 
@@ -61,7 +62,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
 
     africa_files_exist = os.path.isfile(Path(output_dir_africa) / f'africa_geodata.parquet')
     if africa_files_exist:
-        completed_country_list = gpd.read_parquet(Path(output_dir_africa) / f'africa_geodata.parquet')
+        completed_country_list = pd.read_parquet(Path(output_dir_africa) / f'africa_geodata.parquet', columns=['country_code'])
         completed_country_list = completed_country_list['country_code'].unique()
         logging.info(f'Completed countries: {completed_country_list}')
         completed_country_list = [x for x in country_list if x not in set(completed_country_list)]
@@ -73,7 +74,6 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
     if (africa_files_exist is not True) or (regional_files_exist is not True):
 
         logging.info(f'Processing Africa and regional data.')
-
         logging.info(f'----------------------')
 
         # Buildings
@@ -140,31 +140,28 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
                             (buildings['building_area_log'] >= 3.5) & (buildings['building_area_log'] < 3.75),
                             (buildings['building_area_log'] >= 3.75) & (buildings['building_area_log'] < 4),
                             (buildings['building_area_log'] >= 4)]
-
-            labels = ['01_0.50__log10_3.2', '02_0.75__log10_5.6', '03_1.00__log10_10', '04_1.25__log10_17.8', '05_1.50__log10_31.6', '06_1.75__log10_56.2', '07_2.00__log10_100', '08_2.25__log10_177.8', '09_2.50__log10_316.2', '10_2.75__log10_562.3', '11_3.00__log10_1000', '12_3.25__log10_1778.3', '13_3.50__log10_3162.3', '14_3.75__log10_5623.4', '15_4.00__log10_10000']
-            buildings["bin_area"] = np.select(conditions, labels, default=None)
+            bin_area_labels = ['01_0.50__log10_3.2', '02_0.75__log10_5.6', '03_1.00__log10_10', '04_1.25__log10_17.8', '05_1.50__log10_31.6', '06_1.75__log10_56.2', '07_2.00__log10_100', '08_2.25__log10_177.8', '09_2.50__log10_316.2', '10_2.75__log10_562.3', '11_3.00__log10_1000', '12_3.25__log10_1778.3', '13_3.50__log10_3162.3', '14_3.75__log10_5623.4', '15_4.00__log10_10000']
+            buildings["bin_area"] = np.select(conditions, bin_area_labels, default=None)
 
             buildings = buildings[['block_id','bin_area','building_count','building_area']]
-            buildings = buildings.groupby(['block_id','bin_area']).sum(['building_count','building_area']).reset_index()
+            # buildings = buildings.groupby(['block_id','bin_area']).sum(['building_count','building_area']).reset_index()
+            buildings = buildings.groupby(['block_id','bin_area'])[['building_count','building_area']].agg('sum').reset_index()
 
             buildings = buildings.join(pd.get_dummies(buildings["bin_area"], prefix='bldg_area_count_bin'))
             buildings = buildings.join(pd.get_dummies(buildings["bin_area"], prefix='bldg_area_m2_bin'))
-
             logging.info(f"Memory usage {buildings.shape}, {mem_profile()}")
-
-            bin_area_count_list = ['bldg_area_count_bin_' + s for s in labels]
-            bin_area_m2_list = ['bldg_area_m2_bin_' + s for s in labels]
+            bin_area_count_list = ['bldg_area_count_bin_' + s for s in bin_area_labels]
+            bin_area_m2_list = ['bldg_area_m2_bin_' + s for s in bin_area_labels]
 
             buildings[buildings.columns[buildings.columns.isin(bin_area_m2_list)]] = buildings[buildings.columns[buildings.columns.isin(bin_area_m2_list)]].multiply(buildings['building_area'], axis="index")
             building_col_list = ['building_area', 'building_count'] + bin_area_count_list + bin_area_m2_list
             building_col_list = list(buildings.columns[buildings.columns.isin(building_col_list)])
-            buildings = buildings.loc[:, list(['block_id'] + building_col_list)]
-
+            buildings = buildings[building_col_list]
             all_buildings = pd.concat([all_buildings, buildings], ignore_index=True)
 
         all_buildings.to_parquet(path = Path(output_dir_africa) / f'africa_buildings_data.parquet')
+        del all_buildings
         logging.info(f"Memory usage {mem_profile()}")
-
         logging.info(f'----------------------')
 
         # Population
@@ -185,8 +182,8 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
             all_population = pd.concat([all_population, population], ignore_index=True)
 
         all_population.to_parquet(path = Path(output_dir_africa) / f'africa_population_data.parquet')
+        del all_population
         logging.info(f"Memory usage {mem_profile()}")
-
         logging.info(f'----------------------')
 
         # Complexity
@@ -211,8 +208,8 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
             all_complexity = pd.concat([all_complexity, complexity], ignore_index=True)
 
         all_complexity.to_parquet(path = Path(output_dir_africa) / f'africa_complexity_data.parquet')
+        del all_complexity
         logging.info(f"Memory usage {mem_profile()}")
-
         logging.info(f'----------------------')
 
         # Blocks
@@ -226,7 +223,6 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
             'block_perimeter': pd.Series(dtype='float64'),
             'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326)
 
-        all_blocks = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326)
         for country_code in country_list:
             print(country_code)
             logging.info(f'{country_code}')
@@ -236,34 +232,44 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
 
         logging.info(f"Memory usage {mem_profile()}")
         all_blocks.to_parquet(path = Path(output_dir_africa) / f'africa_blocks_geodata.parquet')
+        del all_blocks
         logging.info(f"Memory usage {mem_profile()}")
-
         logging.info(f'----------------------')
 
+        # Merge data
         logging.info(f'Merge together.')
-        all_data = pd.merge(left = all_blocks, right = all_population, how = 'left', on = 'block_id')
-        all_data = pd.merge(left = all_data, right = all_buildings, how = 'left', on = 'block_id')
-        all_data = pd.merge(left = all_data, right = all_complexity, how = 'left', on = 'block_id')
+        all_buildings = pd.read_parquet(path = Path(output_dir_africa) / f'africa_buildings_data.parquet')
+        bin_area_col_list = list(all_buildings.columns[all_buildings.columns.str.contains('_bin_')])
+        all_population = pd.read_parquet(path = Path(output_dir_africa) / f'africa_population_data.parquet')
+        all_complexity = pd.read_parquet(path = Path(output_dir_africa) / f'africa_complexity_data.parquet')
+        all_data = gpd.read_parquet(path = Path(output_dir_africa) / f'africa_blocks_geodata.parquet')
 
-        del all_blocks, blocks, all_population, population, all_buildings, buildings, all_complexity, complexity
         logging.info(f"Memory usage {mem_profile()}")
-
+        all_data = all_data.set_index('block_id').join(all_population.set_index('block_id'), how='left')
+        logging.info(f"Memory usage {mem_profile()}")
+        all_data = all_data.join(all_buildings.set_index('block_id'), how='left')
+        logging.info(f"Memory usage {mem_profile()}")
+        all_data = all_data.join(all_complexity.set_index('block_id'), how='left')
+        logging.info(f"Memory usage {mem_profile()}")
+        all_data = all_data.reset_index()
+        # all_data = pd.merge(left = all_blocks, right = all_population, how = 'left', on = 'block_id')
+        # all_data = pd.merge(left = all_data, right = all_buildings, how = 'left', on = 'block_id')
+        # all_data = pd.merge(left = all_data, right = all_complexity, how = 'left', on = 'block_id')
+        del all_population, all_buildings, all_complexity # all_blocks
+        logging.info(f"Memory usage {mem_profile()}")
         all_data['on_network_street_length_na'] = all_data['on_network_street_length'].isnull().astype(int)
         all_data['off_network_street_length_na'] = all_data['off_network_street_length'].isnull().astype(int)
-
-        bin_area_col_list = list(all_data.columns[all_data.columns.isin(bin_area_count_list + bin_area_m2_list)])
         all_data[bin_area_col_list] = all_data[bin_area_col_list].fillna(value=0)
         all_data['k_complexity'] = all_data['k_complexity'].fillna(value=1)
-
         logging.info(f'Check for missing.')
         for col in all_data.columns:
             if all_data[col].isnull().sum() > 0:
                 all_data[col] = all_data[col].fillna(0)
                 print(f'{col}: {all_data[col].isnull().sum()}')
                 logging.info(f'{col}: {all_data[col].isnull().sum()}')
-
         logging.info(f'----------------------')
 
+        # Generate metrics
         logging.info(f'Generate additional metrics.')
         logging.info(f"Memory usage {mem_profile()}")
         all_data = all_data.rename(columns={'block_area':'block_area_m2',
@@ -274,6 +280,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
                                             'nearest_external_street': 'nearest_external_street_meters'
                                             })
 
+        logging.info(f"Memory usage {mem_profile()}")
         all_data['block_hectares'] = all_data['block_area_m2'] * 0.0001
         all_data['block_area_km2'] = all_data['block_area_m2'] * 1e-6
         all_data['average_building_area_m2'] = (all_data['building_area_m2'] / all_data['building_count']).replace([np.inf, -np.inf, np.nan], 0)
@@ -294,6 +301,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         all_data['worldpop_population_un_per_building'] = (all_data['worldpop_population_un'] / all_data['building_count']).replace([np.inf, -np.inf, np.nan], 0)
         all_data['parcel_layers'] = all_data['parcel_layers'].astype('str')
 
+        logging.info(f"Memory usage {mem_profile()}")
         conditions = [(all_data['nearest_external_street_meters'] > 0) | (all_data['on_network_street_length_na'] == 1),
                         (all_data['k_complexity'] == 1),
                         (all_data['k_complexity'] == 2),
@@ -308,10 +316,16 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         labels = ['Off-network','1', '2', '3', '4', '5', '6', '7', '8', '9', '10+']
         all_data['k_labels'] = np.select(conditions, labels, default='Off-network')
 
+        logging.info(f"Memory usage {mem_profile()}")
+        logging.info(f"Merge crosswalks")
         all_xwalk = pd.read_parquet(path = Path(crosswalks_dir) / f'ghsl_crosswalk.parquet')
-        all_xwalk = all_xwalk[['block_id', 'country_name', 'continent', 'area_type', 'class_urban_hierarchy','class_urban_periurban_nonurban', 'class_urban_nonurban', 'urban_id','urban_center_name', 'urban_country_code', 'urban_country_name','conurbation_id', 'conurbation_area_name','conurbation_area_name_short', 'conurbation_country_code','conurbation_country_name', 'agglosid', 'agglosname', 'metropole', 'urban_layer_code']]
-        all_data = pd.merge(left = all_data, right = all_xwalk, how = 'left', on = 'block_id')
-        all_data_col_list = ['block_id', 'block_geohash', 'block_area_m2', 'block_hectares', 'block_area_km2', 'block_perimeter_meters', 'building_area_m2', 'building_count', 'average_building_area_m2', 'building_to_block_area_ratio', 'parcel_count', 'average_parcel_area_m2', 'parcel_layers', 'k_complexity', 'k_labels', 'k_complexity_weighted_landscan_un', 'k_complexity_weighted_worldpop_un', 'landscan_population', 'landscan_population_un', 'landscan_population_un_log', 'landscan_population_un_density_hectare', 'landscan_population_un_density_hectare_log', 'landscan_population_un_per_building_area_m2', 'landscan_population_un_per_building', 'worldpop_population', 'worldpop_population_un', 'worldpop_population_un_log', 'worldpop_population_un_density_hectare', 'worldpop_population_un_density_hectare_log', 'worldpop_population_un_per_building_area_m2', 'worldpop_population_un_per_building', 'on_network_street_length_meters', 'off_network_street_length_meters', 'nearest_external_street_meters', 'on_network_street_length_na', 'off_network_street_length_na', 'gadm_code', 'country_code', 'country_name', 'continent', 'area_type', 'class_urban_hierarchy', 'class_urban_periurban_nonurban', 'class_urban_nonurban', 'urban_id', 'urban_center_name', 'urban_country_code', 'urban_country_name', 'conurbation_id', 'conurbation_area_name', 'conurbation_area_name_short', 'conurbation_country_code', 'conurbation_country_name', 'agglosid', 'agglosname', 'metropole', 'urban_layer_code'] + bin_area_col_list + ['geometry']
+        all_xwalk = all_xwalk[['block_id', 'country_name', 'continent', 'area_type', 'class_urban_hierarchy','class_urban_periurban_nonurban', 'class_urban_nonurban', 'urban_id','urban_center_name', 'urban_country_code', 'urban_country_name','conurbation_id', 'conurbation_area_name_short', 'conurbation_country_code','conurbation_country_name', 'agglosid', 'agglosname', 'metropole', 'urban_layer_code']]
+        #all_data = pd.merge(left = all_data, right = all_xwalk, how = 'left', on = 'block_id')
+        all_data = all_data.set_index('block_id').join(all_xwalk.set_index('block_id'), how='left')
+        logging.info(f"Memory usage {mem_profile()}")
+        all_data = all_data.reset_index()
+
+        all_data_col_list = ['block_id', 'block_geohash', 'block_area_m2', 'block_hectares', 'block_area_km2', 'block_perimeter_meters', 'building_area_m2', 'building_count', 'average_building_area_m2', 'building_to_block_area_ratio', 'parcel_count', 'average_parcel_area_m2', 'parcel_layers', 'k_complexity', 'k_labels', 'k_complexity_weighted_landscan_un', 'k_complexity_weighted_worldpop_un', 'landscan_population', 'landscan_population_un', 'landscan_population_un_log', 'landscan_population_un_density_hectare', 'landscan_population_un_density_hectare_log', 'landscan_population_un_per_building_area_m2', 'landscan_population_un_per_building', 'worldpop_population', 'worldpop_population_un', 'worldpop_population_un_log', 'worldpop_population_un_density_hectare', 'worldpop_population_un_density_hectare_log', 'worldpop_population_un_per_building_area_m2', 'worldpop_population_un_per_building', 'on_network_street_length_meters', 'off_network_street_length_meters', 'nearest_external_street_meters', 'on_network_street_length_na', 'off_network_street_length_na', 'gadm_code', 'country_code', 'country_name', 'continent', 'area_type', 'class_urban_hierarchy', 'class_urban_periurban_nonurban', 'class_urban_nonurban', 'urban_id', 'urban_center_name', 'urban_country_code', 'urban_country_name', 'conurbation_id', 'conurbation_area_name_short', 'conurbation_country_code', 'conurbation_country_name', 'agglosid', 'agglosname', 'metropole', 'urban_layer_code'] + bin_area_col_list + ['geometry']
         all_data = all_data[all_data_col_list]
 
         logging.info(f'Check for missing.')
@@ -327,15 +341,20 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         map_col_list = [ 'block_id', 'block_geohash', 'area_type', 'urban_center_name', 'country_name', 'agglosname', 'k_complexity', 'k_labels', 'landscan_population_un', 'landscan_population_un_log', 'landscan_population_un_density_hectare', 'landscan_population_un_density_hectare_log', 'block_hectares', 'building_count', 'average_building_area_m2', 'building_to_block_area_ratio', 'geometry']
         all_data[map_col_list].to_parquet(path = Path(output_dir_africa) / f'africa_map.parquet')
         all_data.drop(columns='geometry').to_parquet(path = Path(output_dir_africa) / f'africa_data.parquet')
-        all_data.drop(columns='geometry').to_csv(path_or_buf = Path(output_dir_africa) / f'africa_data.csv', index=False)
         logging.info(f"Memory usage {mem_profile()}")
 
         logging.info(f'----------------------')
 
         # Urban and regional aggregates
         logging.info(f'Processing regional aggregates.')
-        all_regions = all_data.copy()
+        all_regions = all_data
         del all_data
+
+        all_regions['block_count'] = int(1)
+        agg_col_list = ['block_count', 'block_area_m2', 'block_hectares', 'block_area_km2', 'block_perimeter_meters', 'building_area_m2', 'building_count', 'parcel_count', 'k_complexity_weighted_landscan_un', 'k_complexity_weighted_worldpop_un', 'landscan_population', 'landscan_population_un', 'worldpop_population', 'worldpop_population_un'] + bin_area_col_list
+
+        all_regions = all_regions[list(all_regions.columns[all_regions.columns.isin(['urban_layer_code'] + agg_col_list + ['k_complexity', 'nearest_external_street_meters', 'on_network_street_length_na'])])]
+
         conditions = [(all_regions['nearest_external_street_meters'] > 0) | (all_regions['on_network_street_length_na'] == 1),
                         (all_regions['k_complexity'] == 1), (all_regions['k_complexity'] == 2), (all_regions['k_complexity'] == 3),
                         (all_regions['k_complexity'] == 4), (all_regions['k_complexity'] == 5), (all_regions['k_complexity'] == 6),
@@ -343,6 +362,10 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
                         (all_regions['k_complexity'] >= 10)]
         k_bucket = ['off_network','01', '02', '03', '04', '05', '06', '07', '08', '09', '10_plus']
         all_regions['k_bucket'] = np.select(conditions, k_bucket, default='Off-network')
+        #all_regions = all_regions.groupby(['urban_layer_code','k_bucket']).sum(agg_col_list).reset_index()
+        all_regions = all_regions.groupby(['urban_layer_code','k_bucket'])[agg_col_list].agg('sum').reset_index()
+
+        logging.info(f"Memory usage {mem_profile()}")
 
         all_regions = all_regions.join(pd.get_dummies(all_regions['k_bucket'], prefix='k_ls'))
         all_regions = all_regions.join(pd.get_dummies(all_regions['k_bucket'], prefix='k_wp'))
@@ -351,14 +374,12 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
 
         k_ls_list = list(all_regions.columns[all_regions.columns.isin(k_ls_list)])
         k_wp_list = list(all_regions.columns[all_regions.columns.isin(k_wp_list)])
-        bin_area_col_list = list(all_regions.columns[all_regions.columns.isin(bin_area_count_list + bin_area_m2_list)])
 
         all_regions[k_ls_list] = all_regions[k_ls_list].multiply(all_regions['landscan_population_un'], axis="index")
         all_regions[k_wp_list] = all_regions[k_wp_list].multiply(all_regions['worldpop_population_un'], axis="index")
 
-        all_regions['block_count'] = int(1)
-        agg_col_list = ['block_count', 'block_area_m2', 'block_hectares', 'block_area_km2', 'block_perimeter_meters', 'building_area_m2', 'building_count', 'parcel_count', 'k_complexity_weighted_landscan_un', 'k_complexity_weighted_worldpop_un', 'landscan_population', 'landscan_population_un', 'worldpop_population', 'worldpop_population_un'] + bin_area_col_list + k_ls_list + k_wp_list
-        all_regions = all_regions.groupby(['urban_layer_code']).sum(agg_col_list).reset_index()
+        #all_regions = all_regions.groupby(['urban_layer_code']).sum(agg_col_list).reset_index()
+        all_regions = all_regions.groupby(['urban_layer_code'])[agg_col_list].agg('sum').reset_index()
 
         all_regions['average_building_area_m2'] = (all_regions['building_area_m2'] / all_regions['building_count']).replace([np.inf, -np.inf, np.nan], 0)
         all_regions['average_parcel_area_m2'] = (all_regions['block_area_m2'] / all_regions['parcel_count']).replace([np.inf, -np.inf, np.nan], 0)
@@ -417,7 +438,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         all_regions.to_parquet(path = Path(output_dir_region) / 'aggregate_regional_geodata.parquet')
         all_regions.drop(columns='geometry').to_parquet(path = Path(output_dir_region) /  'aggregate_regional_data.parquet')
         all_regions.to_file(filename = Path(output_dir_region) / 'aggregate_regional_geodata.gpkg', driver='GPKG')
-        all_regions.drop(columns='geometry').to_csv(path_or_buf = Path(output_dir_region) / 'aggregate_regional_data.csv', index=False)
+        # all_regions.drop(columns='geometry').to_csv(path_or_buf = Path(output_dir_region) / 'aggregate_regional_data.csv', index=False)
         logging.info(f"Memory usage {mem_profile()}")
 
     logging.info(f'----------------------')
@@ -426,9 +447,8 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
     africa_files_exist = os.path.isfile(Path(output_dir_africa) / f'africa_geodata.parquet')
 
     if africa_files_exist:
-        all_data = gpd.read_parquet(Path(output_dir_africa) / f'africa_geodata.parquet')
-        completed_country_list = os.listdir(Path(output_dir_country))
 
+        completed_country_list = os.listdir(Path(output_dir_country))
         if len(completed_country_list) > 0:
             remaining_country_list = [x for x in country_list if x not in set(completed_country_list)]
         else:
@@ -439,10 +459,11 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
                 logging.info(f'{country_code}')
                 print(country_code)
                 Path(str(output_dir_country) + f'/{country_code}').mkdir(parents=True, exist_ok=True)
-                all_data_sub = all_data.loc[all_data['country_code'] == country_code]
-                all_data_sub.to_parquet(Path(output_dir_country) / f'{country_code}' / f'{country_code}_geodata.parquet')
-                all_data_sub.to_file(Path(output_dir_country) / f'{country_code}' / f'{country_code}_geodata.gpkg', driver="GPKG")
-                all_data.drop(columns='geometry').to_csv(path_or_buf = Path(output_dir_country) / f'{country_code}' / f'{country_code}_data.csv', index=False)
+                country_data = gpd.read_parquet(Path(output_dir_africa) / f'africa_geodata.parquet', filters = [('country_code', 'in', [country_code])])
+                country_data_sub = country_data.loc[country_data['country_code'] == country_code]
+                country_data_sub.to_parquet(Path(output_dir_country) / f'{country_code}' / f'{country_code}_geodata.parquet')
+                country_data_sub.to_file(Path(output_dir_country) / f'{country_code}' / f'{country_code}_geodata.gpkg', driver="GPKG")
+                # country_data.drop(columns='geometry').to_csv(path_or_buf = Path(output_dir_country) / f'{country_code}' / f'{country_code}_data.csv', index=False)
 
     logging.info(f'----------------------')
 
