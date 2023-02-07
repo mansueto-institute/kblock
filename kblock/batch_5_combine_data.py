@@ -63,6 +63,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
     regional_files_exist = os.path.isfile(Path(output_dir_region) / f'aggregate_regional_geodata.parquet')
 
     if (africa_files_exist is not True) or (regional_files_exist is not True):
+
         logging.info(f'Processing Africa and regional data.')
 
         logging.info(f'----------------------')
@@ -110,7 +111,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         for country_code in country_list:
             print(country_code)
             logging.info(f'{country_code}')
-            buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_points_{country_code}.parquet')
+            buildings = gpd.read_parquet(path = Path(buildings_dir) / 'points' / f'buildings_points_{country_code}.parquet')
             buildings = buildings.drop(columns='geometry')
             buildings = buildings[['block_id', 'building_area']]
             buildings['building_count'] = int(1)
