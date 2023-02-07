@@ -65,44 +65,6 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
     if (africa_files_exist is not True) or (regional_files_exist is not True):
         logging.info(f'Processing Africa and regional data.')
 
-        # Blocks
-        logging.info(f'Processing blocks.')
-        all_blocks = gpd.GeoDataFrame({
-            'block_id': pd.Series(dtype='str'),
-            'block_geohash': pd.Series(dtype='str'),
-            'gadm_code': pd.Series(dtype='str'),
-            'country_code': pd.Series(dtype='str'),
-            'block_area': pd.Series(dtype='float64'),
-            'block_perimeter': pd.Series(dtype='float64'),
-            'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326)
-
-        all_blocks = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326)
-        for country_code in country_list:
-            print(country_code)
-            logging.info(f'{country_code}')
-            blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True)
-            blocks = blocks[['block_id', 'block_geohash', 'gadm_code', 'country_code', 'block_area', 'block_perimeter', 'geometry']]
-            all_blocks = pd.concat([all_blocks, blocks], ignore_index=True)
-
-        logging.info(f'----------------------')
-
-        # Population
-        logging.info(f'Processing population.')
-        all_population = pd.DataFrame({
-            'block_id': pd.Series(dtype='str'),
-            'landscan_population': pd.Series(dtype= 'float64'),
-            'landscan_population_un': pd.Series(dtype= 'float64'),
-            'worldpop_population': pd.Series(dtype= 'float64'),
-            'worldpop_population_un': pd.Series(dtype= 'float64')
-            })
-
-        for country_code in country_list:
-            print(country_code)
-            logging.info(f'{country_code}')
-            population = pd.read_parquet(path = Path(population_dir) / f'population_{country_code}.parquet')
-            population = population[['block_id', 'landscan_population', 'landscan_population_un', 'worldpop_population', 'worldpop_population_un']]
-            all_population = pd.concat([all_population, population], ignore_index=True)
-
         logging.info(f'----------------------')
 
         # Buildings
@@ -149,6 +111,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
             print(country_code)
             logging.info(f'{country_code}')
             buildings = gpd.read_parquet(path = Path(buildings_dir) / f'buildings_points_{country_code}.parquet')
+            buildings = buildings.drop(columns='geometry')
             buildings = buildings[['block_id', 'building_area']]
             buildings['building_count'] = int(1)
             buildings['building_area_log'] = np.log10(buildings['building_area']).replace([np.inf, -np.inf, np.nan], 0).clip(lower=0)
@@ -186,6 +149,25 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
 
         logging.info(f'----------------------')
 
+        # Population
+        logging.info(f'Processing population.')
+        all_population = pd.DataFrame({
+            'block_id': pd.Series(dtype='str'),
+            'landscan_population': pd.Series(dtype= 'float64'),
+            'landscan_population_un': pd.Series(dtype= 'float64'),
+            'worldpop_population': pd.Series(dtype= 'float64'),
+            'worldpop_population_un': pd.Series(dtype= 'float64')
+            })
+
+        for country_code in country_list:
+            print(country_code)
+            logging.info(f'{country_code}')
+            population = pd.read_parquet(path = Path(population_dir) / f'population_{country_code}.parquet')
+            population = population[['block_id', 'landscan_population', 'landscan_population_un', 'worldpop_population', 'worldpop_population_un']]
+            all_population = pd.concat([all_population, population], ignore_index=True)
+
+        logging.info(f'----------------------')
+
         # Complexity
         logging.info(f'Processing complexity.')
         all_complexity = pd.DataFrame({
@@ -206,6 +188,27 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
             complexity['parcel_layers'] = complexity['parcel_layers'].astype('str')
             complexity = complexity[['block_id', 'on_network_street_length', 'off_network_street_length', 'nearest_external_street', 'parcel_count', 'parcel_layers', 'k_complexity']]
             all_complexity = pd.concat([all_complexity, complexity], ignore_index=True)
+
+        logging.info(f'----------------------')
+
+        # Blocks
+        logging.info(f'Processing blocks.')
+        all_blocks = gpd.GeoDataFrame({
+            'block_id': pd.Series(dtype='str'),
+            'block_geohash': pd.Series(dtype='str'),
+            'gadm_code': pd.Series(dtype='str'),
+            'country_code': pd.Series(dtype='str'),
+            'block_area': pd.Series(dtype='float64'),
+            'block_perimeter': pd.Series(dtype='float64'),
+            'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326)
+
+        all_blocks = gpd.GeoDataFrame({'block_id': pd.Series(dtype='str'), 'gadm_code': pd.Series(dtype='str'), 'country_code': pd.Series(dtype='str'), 'geometry': gpd.GeoSeries(dtype='geometry')}).set_crs(epsg=4326)
+        for country_code in country_list:
+            print(country_code)
+            logging.info(f'{country_code}')
+            blocks = gpd.read_parquet(path = Path(blocks_dir) / f'blocks_{country_code}.parquet', memory_map = True)
+            blocks = blocks[['block_id', 'block_geohash', 'gadm_code', 'country_code', 'block_area', 'block_perimeter', 'geometry']]
+            all_blocks = pd.concat([all_blocks, blocks], ignore_index=True)
 
         logging.info(f'----------------------')
 
