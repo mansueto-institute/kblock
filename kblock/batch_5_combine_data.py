@@ -140,9 +140,9 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
 
             bin_area_count_list = ['bldg_area_count_bin_' + s for s in labels]
             bin_area_m2_list = ['bldg_area_m2_bin_' + s for s in labels]
-            buildings[bin_area_m2_list] = buildings[bin_area_m2_list].multiply(buildings['building_area'], axis="index")
-
+            buildings[buildings.columns[buildings.columns.isin(bin_area_m2_list)]] = buildings[buildings.columns[buildings.columns.isin(bin_area_m2_list)]].multiply(buildings['building_area'], axis="index")
             building_col_list = ['building_area', 'building_count'] + bin_area_count_list + bin_area_m2_list
+            building_col_list = list(buildings.columns[buildings.columns.isin(building_col_list)])
             buildings = buildings.groupby(['block_id']).sum(building_col_list).reset_index()
 
             buildings = buildings.loc[:, list(['block_id'] + building_col_list)]
@@ -222,8 +222,9 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
 
         all_data['on_network_street_length_na'] = all_data['on_network_street_length'].isnull().astype(int)
         all_data['off_network_street_length_na'] = all_data['off_network_street_length'].isnull().astype(int)
-        all_data[bin_area_count_list] = all_data[bin_area_count_list].fillna(value=0)
-        all_data[bin_area_m2_list] = all_data[bin_area_m2_list].fillna(value=0)
+
+        bin_area_col_list = list(all_data.columns[all_data.columns.isin(bin_area_count_list + bin_area_m2_list)])
+        all_data[bin_area_col_list] = all_data[bin_area_col_list].fillna(value=0)
         all_data['k_complexity'] = all_data['k_complexity'].fillna(value=1)
 
         logging.info(f'Check for missing.')
@@ -264,12 +265,6 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         all_data['worldpop_population_un_per_building'] = (all_data['worldpop_population_un'] / all_data['building_count']).replace([np.inf, -np.inf, np.nan], 0)
         all_data['parcel_layers'] = all_data['parcel_layers'].astype('str')
 
-        all_xwalk = pd.read_parquet(path = Path(crosswalks_dir) / f'ghsl_crosswalk.parquet')
-        all_xwalk = all_xwalk[['block_id', 'country_name', 'continent', 'area_type', 'class_urban_hierarchy','class_urban_periurban_nonurban', 'class_urban_nonurban', 'urban_id','urban_center_name', 'urban_country_code', 'urban_country_name','conurbation_id', 'conurbation_area_name','conurbation_area_name_short', 'conurbation_country_code','conurbation_country_name', 'agglosid', 'agglosname', 'metropole', 'urban_layer_code']]
-        all_data = pd.merge(left = all_data, right = all_xwalk, how = 'left', on = 'block_id')
-        all_data_col_list = ['block_id', 'block_geohash', 'block_area_m2', 'block_hectares', 'block_area_km2', 'block_perimeter_meters', 'building_area_m2', 'building_count', 'average_building_area_m2', 'building_to_block_area_ratio', 'parcel_count', 'average_parcel_area_m2', 'parcel_layers', 'k_complexity', 'k_complexity_weighted_landscan_un', 'k_complexity_weighted_worldpop_un', 'landscan_population', 'landscan_population_un', 'landscan_population_un_log', 'landscan_population_un_density_hectare', 'landscan_population_un_density_hectare_log', 'landscan_population_un_per_building_area_m2', 'landscan_population_un_per_building', 'worldpop_population', 'worldpop_population_un', 'worldpop_population_un_log', 'worldpop_population_un_density_hectare', 'worldpop_population_un_density_hectare_log', 'worldpop_population_un_per_building_area_m2', 'worldpop_population_un_per_building', 'on_network_street_length_meters', 'off_network_street_length_meters', 'nearest_external_street_meters', 'on_network_street_length_na', 'off_network_street_length_na', 'gadm_code', 'country_code', 'country_name', 'continent', 'area_type', 'class_urban_hierarchy', 'class_urban_periurban_nonurban', 'class_urban_nonurban', 'urban_id', 'urban_center_name', 'urban_country_code', 'urban_country_name', 'conurbation_id', 'conurbation_area_name', 'conurbation_area_name_short', 'conurbation_country_code', 'conurbation_country_name', 'agglosid', 'agglosname', 'metropole', 'urban_layer_code'] + bin_area_count_list + bin_area_m2_list + ['geometry']
-        all_data = all_data[all_data_col_list]
-
         conditions = [(all_data['nearest_external_street_meters'] > 0) | (all_data['on_network_street_length_na'] == 1),
                         (all_data['k_complexity'] == 1),
                         (all_data['k_complexity'] == 2),
@@ -283,6 +278,12 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
                         (all_data['k_complexity'] >= 10)]
         labels = ['Off-network','1', '2', '3', '4', '5', '6', '7', '8', '9', '10+']
         all_data['k_labels'] = np.select(conditions, labels, default='Off-network')
+
+        all_xwalk = pd.read_parquet(path = Path(crosswalks_dir) / f'ghsl_crosswalk.parquet')
+        all_xwalk = all_xwalk[['block_id', 'country_name', 'continent', 'area_type', 'class_urban_hierarchy','class_urban_periurban_nonurban', 'class_urban_nonurban', 'urban_id','urban_center_name', 'urban_country_code', 'urban_country_name','conurbation_id', 'conurbation_area_name','conurbation_area_name_short', 'conurbation_country_code','conurbation_country_name', 'agglosid', 'agglosname', 'metropole', 'urban_layer_code']]
+        all_data = pd.merge(left = all_data, right = all_xwalk, how = 'left', on = 'block_id')
+        all_data_col_list = ['block_id', 'block_geohash', 'block_area_m2', 'block_hectares', 'block_area_km2', 'block_perimeter_meters', 'building_area_m2', 'building_count', 'average_building_area_m2', 'building_to_block_area_ratio', 'parcel_count', 'average_parcel_area_m2', 'parcel_layers', 'k_complexity', 'k_labels', 'k_complexity_weighted_landscan_un', 'k_complexity_weighted_worldpop_un', 'landscan_population', 'landscan_population_un', 'landscan_population_un_log', 'landscan_population_un_density_hectare', 'landscan_population_un_density_hectare_log', 'landscan_population_un_per_building_area_m2', 'landscan_population_un_per_building', 'worldpop_population', 'worldpop_population_un', 'worldpop_population_un_log', 'worldpop_population_un_density_hectare', 'worldpop_population_un_density_hectare_log', 'worldpop_population_un_per_building_area_m2', 'worldpop_population_un_per_building', 'on_network_street_length_meters', 'off_network_street_length_meters', 'nearest_external_street_meters', 'on_network_street_length_na', 'off_network_street_length_na', 'gadm_code', 'country_code', 'country_name', 'continent', 'area_type', 'class_urban_hierarchy', 'class_urban_periurban_nonurban', 'class_urban_nonurban', 'urban_id', 'urban_center_name', 'urban_country_code', 'urban_country_name', 'conurbation_id', 'conurbation_area_name', 'conurbation_area_name_short', 'conurbation_country_code', 'conurbation_country_name', 'agglosid', 'agglosname', 'metropole', 'urban_layer_code'] + bin_area_col_list + ['geometry']
+        all_data = all_data[all_data_col_list]
 
         logging.info(f'Check for missing.')
         for col in all_data.columns:
@@ -315,11 +316,16 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         all_regions = all_regions.join(pd.get_dummies(all_regions['k_bucket'], prefix='k_wp'))
         k_ls_list = ['k_ls_01','k_ls_02','k_ls_03','k_ls_04','k_ls_05','k_ls_06','k_ls_07','k_ls_08','k_ls_09','k_ls_10_plus','k_ls_off_network']
         k_wp_list = ['k_wp_01','k_wp_02','k_wp_03','k_wp_04','k_wp_05','k_wp_06','k_wp_07','k_wp_08','k_wp_09','k_wp_10_plus','k_wp_off_network']
+
+        k_ls_list = list(all_regions.columns[all_regions.columns.isin(k_ls_list)])
+        k_wp_list = list(all_regions.columns[all_regions.columns.isin(k_wp_list)])
+        bin_area_col_list = list(all_regions.columns[all_regions.columns.isin(bin_area_count_list + bin_area_m2_list)])
+
         all_regions[k_ls_list] = all_regions[k_ls_list].multiply(all_regions['landscan_population_un'], axis="index")
         all_regions[k_wp_list] = all_regions[k_wp_list].multiply(all_regions['worldpop_population_un'], axis="index")
 
         all_regions['block_count'] = int(1)
-        agg_col_list = ['block_count', 'block_area_m2', 'block_hectares', 'block_area_km2', 'block_perimeter_meters', 'building_area_m2', 'building_count', 'parcel_count', 'k_complexity_weighted_landscan_un', 'k_complexity_weighted_worldpop_un', 'landscan_population', 'landscan_population_un', 'worldpop_population', 'worldpop_population_un'] + bin_area_count_list + bin_area_m2_list + k_ls_list + k_wp_list
+        agg_col_list = ['block_count', 'block_area_m2', 'block_hectares', 'block_area_km2', 'block_perimeter_meters', 'building_area_m2', 'building_count', 'parcel_count', 'k_complexity_weighted_landscan_un', 'k_complexity_weighted_worldpop_un', 'landscan_population', 'landscan_population_un', 'worldpop_population', 'worldpop_population_un'] + bin_area_col_list + k_ls_list + k_wp_list
         all_regions = all_regions.groupby(['urban_layer_code']).sum(agg_col_list).reset_index()
 
         all_regions['average_building_area_m2'] = (all_regions['building_area_m2'] / all_regions['building_count']).replace([np.inf, -np.inf, np.nan], 0)
