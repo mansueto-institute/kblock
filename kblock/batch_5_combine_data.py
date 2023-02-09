@@ -19,7 +19,7 @@ from pathlib import Path
 import argparse
 import warnings; warnings.filterwarnings('ignore', message='.*initial implementation of Parquet.*')
 
-def mem_profile() -> str: 
+def mem_profile() -> str:
     """
     Return memory usage, str
     """
@@ -521,21 +521,29 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
                             streets_lines['urban_layer_code'] = boundary
                             streets_lines['country_code'] = country_code
                             streets_lines['osm_highway_tag'] = tag
-                            streets_lines['street_length_meters'] = streets_lines.to_crs(3395).length
-                            streets_lines['mean_linearity'] = momepy.Linearity(streets_lines['geometry'].to_crs(3395)).series * streets_lines['street_length_meters']
+                            streets_lines['street_length_meters'] = (streets_lines.to_crs(3395).length).replace([np.inf, -np.inf, np.nan], 0)
+                            streets_lines['mean_linearity'] = (momepy.Linearity(streets_lines['geometry'].to_crs(3395)).series * streets_lines['street_length_meters']).replace([np.inf, -np.inf, np.nan], 0)
                             streets_lines = streets_lines[['urban_layer_code','country_code','osm_highway_tag','street_length_meters','mean_linearity']]
                             streets_lines[['street_length_meters','mean_linearity']] = streets_lines[['street_length_meters','mean_linearity']].fillna(0)
-                            streets_lines = streets_lines.groupby(['urban_layer_code','country_code','osm_highway_tag']).sum(['street_length_meters','mean_linearity']).reset_index()
-                            streets_lines['mean_linearity'] = (streets_lines['mean_linearity'] / streets_lines['street_length_meters']).replace([np.inf, -np.inf, np.nan], 0)
+                            # streets_lines = streets_lines.groupby(['urban_layer_code','country_code','osm_highway_tag']).sum(['street_length_meters','mean_linearity']).reset_index()
+                            streets_lines = streets_lines.groupby(['urban_layer_code','country_code','osm_highway_tag'])[['street_length_meters','mean_linearity']].agg('sum').reset_index()
+                            try:
+                                streets_lines['mean_linearity'] = (streets_lines['mean_linearity'] / streets_lines['street_length_meters']).replace([np.inf, -np.inf, np.nan], 0)
+                            except:
+                                streets_lines['mean_linearity'] = 0
                             streets_metrics = pd.concat([streets_metrics, streets_lines])
                 else:
                     streets_lines = gpd.overlay(df1 = streets, df2 = boundary_polys[['urban_layer_code','country_code','geometry']], how='intersection', keep_geom_type = True, make_valid = True)
-                    streets_lines['street_length_meters'] = streets_lines.to_crs(3395).length
-                    streets_lines['mean_linearity'] = momepy.Linearity(streets_lines['geometry'].to_crs(3395)).series * streets_lines['street_length_meters']
+                    streets_lines['street_length_meters'] = (streets_lines.to_crs(3395).length).replace([np.inf, -np.inf, np.nan], 0)
+                    streets_lines['mean_linearity'] = (momepy.Linearity(streets_lines['geometry'].to_crs(3395)).series * streets_lines['street_length_meters']).replace([np.inf, -np.inf, np.nan], 0)
                     streets_lines = streets_lines[['urban_layer_code','country_code','osm_highway_tag','street_length_meters','mean_linearity']]
                     streets_lines[['street_length_meters','mean_linearity']] = streets_lines[['street_length_meters','mean_linearity']].fillna(0)
-                    streets_lines = streets_lines.groupby(['urban_layer_code','country_code','osm_highway_tag']).sum(['street_length_meters','mean_linearity']).reset_index()
-                    streets_lines['mean_linearity'] = (streets_lines['mean_linearity'] / streets_lines['street_length_meters']).replace([np.inf, -np.inf, np.nan], 0)
+                    # streets_lines = streets_lines.groupby(['urban_layer_code','country_code','osm_highway_tag']).sum(['street_length_meters','mean_linearity']).reset_index()
+                    streets_lines = streets_lines.groupby(['urban_layer_code','country_code','osm_highway_tag'])[['street_length_meters','mean_linearity']].agg('sum').reset_index()
+                    try:
+                        streets_lines['mean_linearity'] = (streets_lines['mean_linearity'] / streets_lines['street_length_meters']).replace([np.inf, -np.inf, np.nan], 0)
+                    except:
+                        streets_lines['mean_linearity'] = 0
                     streets_metrics = pd.concat([streets_metrics, streets_lines])
                 # boundary_residual = subset_boundaries[subset_boundaries['urban_layer_code'].isin([streets_metrics['urban_layer_code'].unique()])][['geometry']]
                 # streets = gpd.overlay(df1 = streets, df2 = boundary_residual, how='difference', keep_geom_type=True, make_valid=True)
