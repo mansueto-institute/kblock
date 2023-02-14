@@ -71,7 +71,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
 
     regional_files_exist = os.path.isfile(Path(output_dir_region) / f'aggregate_regional_geodata.parquet')
 
-    if (africa_files_exist is not True) or (regional_files_exist is not True):
+    if (africa_files_exist is not True):
 
         logging.info(f'Processing Africa and regional data.')
         logging.info(f'----------------------')
@@ -156,7 +156,8 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
             buildings[buildings.columns[buildings.columns.isin(bin_area_m2_list)]] = buildings[buildings.columns[buildings.columns.isin(bin_area_m2_list)]].multiply(buildings['building_area'], axis="index")
             building_col_list = ['building_area', 'building_count'] + bin_area_count_list + bin_area_m2_list
             building_col_list = list(buildings.columns[buildings.columns.isin(building_col_list)])
-            buildings = buildings[building_col_list]
+            buildings = buildings[['block_id'] + building_col_list]
+            buildings = buildings.groupby(['block_id'])[building_col_list].agg('sum').reset_index()
             all_buildings = pd.concat([all_buildings, buildings], ignore_index=True)
 
         all_buildings.to_parquet(path = Path(output_dir_africa) / f'africa_buildings_data.parquet')
@@ -334,6 +335,13 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
                 print(f'{col}: {all_data[col].isnull().sum()}')
                 logging.info(f'{col}: {all_data[col].isnull().sum()}')
 
+        dup_count = all_data.duplicated(subset=['block_id']).sum()
+        logging.info(f'Duplicates {dup_count}')
+        if dup_count > 0:
+            logging.info(f'Dropping duplicates.')
+            all_data.drop_duplicates(subset=['block_id'], keep='first')
+            assert all_data.duplicated(subset=['block_id']).sum() == 0
+
         # Write files
         logging.info(f'Writing Africa files.')
         logging.info(f"Memory usage {mem_profile()}")
@@ -344,6 +352,12 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         logging.info(f"Memory usage {mem_profile()}")
 
         logging.info(f'----------------------')
+
+    if (regional_files_exist is not True):
+
+        all_data = gpd.read_parquet(path = Path(output_dir_africa) / f'africa_geodata.parquet')
+
+        bin_area_col_list = list(all_data.columns[all_data.columns.str.contains('_bin_')])
 
         # Urban and regional aggregates
         logging.info(f'Processing regional aggregates.')
@@ -377,6 +391,8 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
 
         all_regions[k_ls_list] = all_regions[k_ls_list].multiply(all_regions['landscan_population_un'], axis="index")
         all_regions[k_wp_list] = all_regions[k_wp_list].multiply(all_regions['worldpop_population_un'], axis="index")
+
+        agg_col_list = agg_col_list + k_ls_list + k_wp_list
 
         #all_regions = all_regions.groupby(['urban_layer_code']).sum(agg_col_list).reset_index()
         all_regions = all_regions.groupby(['urban_layer_code'])[agg_col_list].agg('sum').reset_index()
