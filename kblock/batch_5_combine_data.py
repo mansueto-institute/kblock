@@ -349,13 +349,14 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         map_col_list = [ 'block_id', 'block_geohash', 'area_type', 'urban_center_name', 'country_name', 'agglosname', 'k_complexity', 'k_labels', 'landscan_population_un', 'landscan_population_un_log', 'landscan_population_un_density_hectare', 'landscan_population_un_density_hectare_log', 'block_hectares', 'building_count', 'average_building_area_m2', 'building_to_block_area_ratio', 'geometry']
         all_data[map_col_list].to_parquet(path = Path(output_dir_africa) / f'africa_map.parquet')
         all_data.drop(columns='geometry').to_parquet(path = Path(output_dir_africa) / f'africa_data.parquet')
+        del all_data
         logging.info(f"Memory usage {mem_profile()}")
 
         logging.info(f'----------------------')
 
     if (regional_files_exist is not True):
 
-        all_data = gpd.read_parquet(path = Path(output_dir_africa) / f'africa_geodata.parquet')
+        all_data = pd.read_parquet(path = Path(output_dir_africa) / f'africa_data.parquet')
 
         bin_area_col_list = list(all_data.columns[all_data.columns.str.contains('_bin_')])
 
@@ -444,7 +445,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         all_boundaries = gpd.read_parquet(Path(crosswalks_dir) / f'urban_boundaries.parquet')
         all_regions = pd.merge(left = all_boundaries, right = all_regions, how = 'right', on = 'urban_layer_code')
 
-        assert all_regions[all_regions['urban_layer_code'].duplicated()].shape[0] == 0
+        dup_count = all_regions.duplicated(subset=['urban_layer_code']).sum()
 
         logging.info(f'Duplicates {dup_count}')
         if dup_count > 0:
