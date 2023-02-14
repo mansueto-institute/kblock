@@ -339,7 +339,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         logging.info(f'Duplicates {dup_count}')
         if dup_count > 0:
             logging.info(f'Dropping duplicates.')
-            all_data.drop_duplicates(subset=['block_id'], keep='first')
+            all_data = all_data.drop_duplicates(subset=['block_id'], keep='first')
             assert all_data.duplicated(subset=['block_id']).sum() == 0
 
         # Write files
@@ -445,6 +445,13 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         all_regions = pd.merge(left = all_boundaries, right = all_regions, how = 'right', on = 'urban_layer_code')
 
         assert all_regions[all_regions['urban_layer_code'].duplicated()].shape[0] == 0
+
+        logging.info(f'Duplicates {dup_count}')
+        if dup_count > 0:
+            logging.info(f'Dropping duplicates.')
+            all_regions = all_regions.drop_duplicates(subset=['urban_layer_code'], keep='first')
+            assert all_regions.duplicated(subset=['urban_layer_code']).sum() == 0
+
         for col in all_regions.columns:
             if all_regions[col].isnull().sum() > 0:
                 print(f'{col}: {all_regions[col].isnull().sum()}')
