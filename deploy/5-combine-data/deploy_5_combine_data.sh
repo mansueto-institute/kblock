@@ -1,7 +1,7 @@
 #!/bin/bash
 
-
-iso_list=(DJI SYC)
+# SYC
+iso_list=(SLE DJI SYC)
 
 working_directory=/Users/nm/Downloads/combine-dev
 
