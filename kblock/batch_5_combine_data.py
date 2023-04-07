@@ -332,6 +332,11 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         all_data['k_labels_detailed'] = np.select(conditions, labels, default= all_data['k_complexity'].astype(int).astype(str))
         all_data.loc[all_data['block_id'].isin(mokoko), 'k_labels_detailed'] = 'Off-network'
 
+        conditions = [(all_data['nearest_external_street_meters'] > 0) | (all_data['on_network_street_length_na'] == 1),
+                        (all_data['k_complexity'] >= 30)]
+        labels = ['Off-network','30+']
+        all_data['k_labels_detailed'] = np.select(conditions, labels, default= all_data['k_complexity'].astype(int).astype(str))
+
         logging.info(f"Memory usage {mem_profile()}")
         logging.info(f"Merge crosswalks")
         all_xwalk = pd.read_parquet(path = Path(crosswalks_dir) / f'ghsl_crosswalk.parquet')
@@ -361,7 +366,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         logging.info(f'Writing Africa files.')
         logging.info(f"Memory usage {mem_profile()}")
         all_data.to_parquet(path = Path(output_dir_africa) / f'africa_geodata.parquet')
-
+        
         map_col_list = ['block_id', 'area_type', 'country_name', 'agglosname', 'k_complexity', 'k_labels', 'k_labels_detailed', 'landscan_population_un', 'landscan_population_un_density_hectare', 'worldpop_population_un', 'worldpop_population_un_density_hectare', 'block_hectares', 'building_count', 'average_building_area_m2', 'geometry']
         all_data[map_col_list].to_parquet(path = Path(output_dir_africa) / f'africa_map.parquet')
         all_data.drop(columns='geometry').to_parquet(path = Path(output_dir_africa) / f'africa_data.parquet')
@@ -480,7 +485,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         all_regions.to_file(filename = Path(output_dir_region) / 'aggregate_regional_geodata.gpkg', driver='GPKG')
         
         reg_col_list = ['urban_layer_code', 'country_name', 'area_type', 'block_count', 'block_area_km2', 'building_count', 'average_building_area_m2', 'k_ls_labels', 'k_wp_labels', 'k_complexity_weighted_landscan_un', 'k_complexity_weighted_worldpop_un', 'landscan_population_un', 'worldpop_population_un', 'landscan_population_un_density_hectare', 'worldpop_population_un_density_hectare', 'geometry']
-        all_regions[reg_col_list].to_parquet(path = Path(output_dir_region) / f'region_map.parquet')
+        all_regions[reg_col_list].to_parquet(path = Path(output_dir_region) / f'regiontile.parquet')
         # all_regions.drop(columns='geometry').to_csv(path_or_buf = Path(output_dir_region) / 'aggregate_regional_data.csv', index=False)
         logging.info(f"Memory usage {mem_profile()}")
 
