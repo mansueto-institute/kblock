@@ -368,7 +368,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         all_data.to_parquet(path = Path(output_dir_africa) / f'africa_geodata.parquet')
         
         map_col_list = ['block_id', 'area_type', 'country_name', 'agglosname', 'k_complexity', 'k_labels', 'k_labels_detailed', 'landscan_population_un', 'landscan_population_un_density_hectare', 'worldpop_population_un', 'worldpop_population_un_density_hectare', 'block_hectares', 'building_count', 'average_building_area_m2', 'geometry']
-        all_data[map_col_list].to_parquet(path = Path(output_dir_africa) / f'africa_map.parquet')
+        all_data[map_col_list].to_parquet(path = Path(output_dir_africa) / f'blocktile.parquet')
         all_data.drop(columns='geometry').to_parquet(path = Path(output_dir_africa) / f'africa_data.parquet')
         del all_data
         logging.info(f"Memory usage {mem_profile()}")
