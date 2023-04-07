@@ -308,7 +308,10 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         all_data['parcel_layers'] = all_data['parcel_layers'].astype('str')
 
         logging.info(f"Memory usage {mem_profile()}")
-        conditions = [(all_data['nearest_external_street_meters'] > 0) | (all_data['on_network_street_length_na'] == 1),
+        mokoko = ['NGA.25.14_1_802', 'NGA.25.14_1_696', 'NGA.25.14_1_697', 'NGA.25.14_1_698', 'NGA.25.14_1_699', 'NGA.25.14_1_700', 'NGA.25.14_1_714', 'NGA.25.14_1_715', 'NGA.25.14_1_716', 'NGA.25.14_1_721', 'NGA.25.14_1_722', 'NGA.25.14_1_723', 'NGA.25.14_1_724', 'NGA.25.14_1_727', 'NGA.25.14_1_728', 'NGA.25.14_1_729', 'NGA.25.14_1_730', 'NGA.25.14_1_731', 'NGA.25.14_1_732', 'NGA.25.14_1_733', 'NGA.25.14_1_734', 'NGA.25.14_1_735', 'NGA.25.14_1_736', 'NGA.25.14_1_737', 'NGA.25.14_1_738', 'NGA.25.14_1_739', 'NGA.25.14_1_740', 'NGA.25.14_1_741', 'NGA.25.14_1_742', 'NGA.25.14_1_743', 'NGA.25.14_1_744', 'NGA.25.14_1_745', 'NGA.25.14_1_746', 'NGA.25.14_1_747', 'NGA.25.14_1_748', 'NGA.25.14_1_749', 'NGA.25.14_1_750', 'NGA.25.14_1_751', 'NGA.25.14_1_752', 'NGA.25.14_1_753', 'NGA.25.14_1_754', 'NGA.25.14_1_755', 'NGA.25.14_1_756', 'NGA.25.14_1_757', 'NGA.25.14_1_758', 'NGA.25.14_1_759', 'NGA.25.14_1_760', 'NGA.25.14_1_761', 'NGA.25.14_1_762', 'NGA.25.14_1_763', 'NGA.25.14_1_764', 'NGA.25.14_1_765', 'NGA.25.14_1_766', 'NGA.25.14_1_767', 'NGA.25.14_1_768', 'NGA.25.14_1_769', 'NGA.25.14_1_770', 'NGA.25.14_1_771', 'NGA.25.14_1_772', 'NGA.25.14_1_773', 'NGA.25.14_1_774', 'NGA.25.14_1_775', 'NGA.25.14_1_776', 'NGA.25.14_1_777', 'NGA.25.14_1_778', 'NGA.25.14_1_779', 'NGA.25.14_1_780', 'NGA.25.14_1_781', 'NGA.25.14_1_782', 'NGA.25.14_1_783', 'NGA.25.14_1_784', 'NGA.25.14_1_785', 'NGA.25.14_1_786', 'NGA.25.14_1_787', 'NGA.25.14_1_788', 'NGA.25.14_1_789', 'NGA.25.14_1_790', 'NGA.25.14_1_791', 'NGA.25.14_1_792', 'NGA.25.14_1_793', 'NGA.25.14_1_794', 'NGA.25.14_1_795', 'NGA.25.14_1_796', 'NGA.25.14_1_797', 'NGA.25.14_1_798', 'NGA.25.14_1_799', 'NGA.25.14_1_800', 'NGA.25.14_1_801', 'NGA.25.14_1_803', 'NGA.25.14_1_804', 'NGA.25.14_1_805', 'NGA.25.14_1_807', 'NGA.25.14_1_808', 'NGA.25.14_1_809', 'NGA.25.14_1_810', 'NGA.25.14_1_811', 'NGA.25.14_1_812', 'NGA.25.14_1_813', 'NGA.25.14_1_814', 'NGA.25.14_1_815', 'NGA.25.14_1_816', 'NGA.25.14_1_817', 'NGA.25.14_1_818', 'NGA.25.14_1_819', 'NGA.25.14_1_820', 'NGA.25.14_1_821', 'NGA.25.14_1_822', 'NGA.25.14_1_823', 'NGA.25.14_1_824', 'NGA.25.14_1_825', 'NGA.25.14_1_826', 'NGA.25.14_1_827', 'NGA.25.14_1_828', 'NGA.25.14_1_829', 'NGA.25.14_1_830', 'NGA.25.14_1_831', 'NGA.25.14_1_832', 'NGA.25.14_1_852', 'NGA.25.14_1_853', 'NGA.25.14_1_854', 'NGA.25.14_1_855', 'NGA.25.14_1_856']
+        # fix mokoko (will be resolved in future versions by excluding barrier from block definition)
+
+        conditions = [(all_data['nearest_external_street_meters'] >= 200),
                         (all_data['k_complexity'] == 1),
                         (all_data['k_complexity'] == 2),
                         (all_data['k_complexity'] == 3),
@@ -321,6 +324,13 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
                         (all_data['k_complexity'] >= 10)]
         labels = ['Off-network','1', '2', '3', '4', '5', '6', '7', '8', '9', '10+']
         all_data['k_labels'] = np.select(conditions, labels, default='Off-network')
+        all_data.loc[all_data['block_id'].isin(mokoko), 'k_labels'] = 'Off-network'
+
+        conditions = [(all_data['nearest_external_street_meters'] >= 200),
+                        (all_data['k_complexity'] >= 30)]
+        labels = ['Off-network','30+']
+        all_data['k_labels_detailed'] = np.select(conditions, labels, default= all_data['k_complexity'].astype(int).astype(str))
+        all_data.loc[all_data['block_id'].isin(mokoko), 'k_labels_detailed'] = 'Off-network'
 
         conditions = [(all_data['nearest_external_street_meters'] > 0) | (all_data['on_network_street_length_na'] == 1),
                         (all_data['k_complexity'] >= 30)]
@@ -356,7 +366,8 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         logging.info(f'Writing Africa files.')
         logging.info(f"Memory usage {mem_profile()}")
         all_data.to_parquet(path = Path(output_dir_africa) / f'africa_geodata.parquet')
-        map_col_list = ['block_id', 'block_geohash', 'area_type', 'country_name', 'agglosname', 'k_complexity', 'k_labels', 'k_labels_detailed', 'landscan_population_un', 'landscan_population_un_density_hectare', 'landscan_population_un_density_hectare_log', 'worldpop_population_un', 'worldpop_population_un_density_hectare', 'block_hectares', 'building_count', 'average_building_area_m2', 'geometry']
+        
+        map_col_list = ['block_id', 'area_type', 'country_name', 'agglosname', 'k_complexity', 'k_labels', 'k_labels_detailed', 'landscan_population_un', 'landscan_population_un_density_hectare', 'worldpop_population_un', 'worldpop_population_un_density_hectare', 'block_hectares', 'building_count', 'average_building_area_m2', 'geometry']
         all_data[map_col_list].to_parquet(path = Path(output_dir_africa) / f'africa_map.parquet')
         all_data.drop(columns='geometry').to_parquet(path = Path(output_dir_africa) / f'africa_data.parquet')
         del all_data
@@ -380,7 +391,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
 
         all_regions = all_regions[list(all_regions.columns[all_regions.columns.isin(['urban_layer_code'] + agg_col_list + ['k_complexity', 'nearest_external_street_meters', 'on_network_street_length_na'])])]
 
-        conditions = [(all_regions['nearest_external_street_meters'] > 0) | (all_regions['on_network_street_length_na'] == 1),
+        conditions = [(all_regions['nearest_external_street_meters'] >= 200),
                         (all_regions['k_complexity'] == 1), (all_regions['k_complexity'] == 2), (all_regions['k_complexity'] == 3),
                         (all_regions['k_complexity'] == 4), (all_regions['k_complexity'] == 5), (all_regions['k_complexity'] == 6),
                         (all_regions['k_complexity'] == 7), (all_regions['k_complexity'] == 8), (all_regions['k_complexity'] == 9),
@@ -472,6 +483,9 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         all_regions.to_parquet(path = Path(output_dir_region) / 'aggregate_regional_geodata.parquet')
         all_regions.drop(columns='geometry').to_parquet(path = Path(output_dir_region) /  'aggregate_regional_data.parquet')
         all_regions.to_file(filename = Path(output_dir_region) / 'aggregate_regional_geodata.gpkg', driver='GPKG')
+        
+        reg_col_list = ['urban_layer_code', 'country_name', 'area_type', 'block_count', 'block_area_km2', 'building_count', 'average_building_area_m2', 'k_ls_labels', 'k_wp_labels', 'k_complexity_weighted_landscan_un', 'k_complexity_weighted_worldpop_un', 'landscan_population_un', 'worldpop_population_un', 'landscan_population_un_density_hectare', 'worldpop_population_un_density_hectare', 'geometry']
+        all_regions[reg_col_list].to_parquet(path = Path(output_dir_region) / f'regiontile.parquet')
         # all_regions.drop(columns='geometry').to_csv(path_or_buf = Path(output_dir_region) / 'aggregate_regional_data.csv', index=False)
         logging.info(f"Memory usage {mem_profile()}")
 
