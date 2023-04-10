@@ -400,6 +400,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
                         (all_regions['k_complexity'] >= 10)]
         k_bucket = ['off_network','01', '02', '03', '04', '05', '06', '07', '08', '09', '10_plus']
         all_regions['k_bucket'] = np.select(conditions, k_bucket, default='Off-network')
+        all_regions.loc[all_regions['block_id'].isin(offnet_list), 'k_bucket'] = 'Off-network'
         #all_regions = all_regions.groupby(['urban_layer_code','k_bucket']).sum(agg_col_list).reset_index()
         all_regions = all_regions.groupby(['urban_layer_code','k_bucket'])[agg_col_list].agg('sum').reset_index()
 
