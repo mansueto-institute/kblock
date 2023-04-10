@@ -388,11 +388,6 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         all_regions = all_data
         del all_data
 
-        all_regions['block_count'] = int(1)
-        agg_col_list = ['block_count', 'block_area_m2', 'block_hectares', 'block_area_km2', 'block_perimeter_meters', 'building_area_m2', 'building_count', 'parcel_count', 'k_complexity_weighted_landscan_un', 'k_complexity_weighted_worldpop_un', 'landscan_population', 'landscan_population_un', 'worldpop_population', 'worldpop_population_un'] + bin_area_col_list
-
-        all_regions = all_regions[list(all_regions.columns[all_regions.columns.isin(['urban_layer_code'] + agg_col_list + ['k_complexity', 'nearest_external_street_meters', 'on_network_street_length_na'])])]
-
         conditions = [(all_regions['nearest_external_street_meters'] >= 200),
                         (all_regions['k_complexity'] == 1), (all_regions['k_complexity'] == 2), (all_regions['k_complexity'] == 3),
                         (all_regions['k_complexity'] == 4), (all_regions['k_complexity'] == 5), (all_regions['k_complexity'] == 6),
@@ -401,6 +396,11 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         k_bucket = ['off_network','01', '02', '03', '04', '05', '06', '07', '08', '09', '10_plus']
         all_regions['k_bucket'] = np.select(conditions, k_bucket, default='Off-network')
         all_regions.loc[all_regions['block_id'].isin(offnet_list), 'k_bucket'] = 'Off-network'
+        
+        all_regions['block_count'] = int(1)
+        agg_col_list = ['block_count', 'block_area_m2', 'block_hectares', 'block_area_km2', 'block_perimeter_meters', 'building_area_m2', 'building_count', 'parcel_count', 'k_complexity_weighted_landscan_un', 'k_complexity_weighted_worldpop_un', 'landscan_population', 'landscan_population_un', 'worldpop_population', 'worldpop_population_un'] + bin_area_col_list
+        all_regions = all_regions[list(all_regions.columns[all_regions.columns.isin(['urban_layer_code', 'k_bucket'] + agg_col_list)])]
+
         #all_regions = all_regions.groupby(['urban_layer_code','k_bucket']).sum(agg_col_list).reset_index()
         all_regions = all_regions.groupby(['urban_layer_code','k_bucket'])[agg_col_list].agg('sum').reset_index()
 
