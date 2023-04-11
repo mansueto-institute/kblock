@@ -334,11 +334,6 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
         all_data['k_labels_detailed'] = np.select(conditions, labels, default= all_data['k_complexity'].astype(int).astype(str))
         all_data.loc[all_data['block_id'].isin(offnet_list), 'k_labels_detailed'] = 'Off-network'
 
-        conditions = [(all_data['nearest_external_street_meters'] > 0) | (all_data['on_network_street_length_na'] == 1),
-                        (all_data['k_complexity'] >= 30)]
-        labels = ['Off-network','30+']
-        all_data['k_labels_detailed'] = np.select(conditions, labels, default= all_data['k_complexity'].astype(int).astype(str))
-
         logging.info(f"Memory usage {mem_profile()}")
         logging.info(f"Merge crosswalks")
         all_xwalk = pd.read_parquet(path = Path(crosswalks_dir) / f'ghsl_crosswalk.parquet')
