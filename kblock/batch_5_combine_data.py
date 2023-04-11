@@ -511,6 +511,7 @@ def main(log_file: Path, country_chunk: list, blocks_dir: Path, population_dir: 
                 Path(str(output_dir_country) + f'/{country_code}').mkdir(parents=True, exist_ok=True)
                 country_data = gpd.read_parquet(Path(output_dir_africa) / f'africa_geodata.parquet', filters = [('country_code', 'in', [country_code])])
                 country_data_sub = country_data.loc[country_data['country_code'] == country_code]
+                country_data_sub = country_data_sub.drop(columns=['k_labels', 'k_labels_detailed'])
                 country_data_sub.to_parquet(Path(output_dir_country) / f'{country_code}' / f'{country_code}_geodata.parquet')
                 country_data_sub.to_file(Path(output_dir_country) / f'{country_code}' / f'{country_code}_geodata.gpkg', driver="GPKG")
                 # country_data.drop(columns='geometry').to_csv(path_or_buf = Path(output_dir_country) / f'{country_code}' / f'{country_code}_data.csv', index=False)
