@@ -94,8 +94,6 @@ unzip temp.zip
 rm temp.zip
 ```
 
-
-
 ### Local deployment
 
 #### Run each bash file serially from terminal.
@@ -104,10 +102,27 @@ cd /users/project/repo/kblock/kblock
 source activate geospatial
 bash /users/project/repo/kblock/deploy/1-prepare-blocks/deploy_1a_prepare_gadm.sh
 bash /users/project/repo/kblock/deploy/1-prepare-blocks/deploy_1b_generate_blocks.sh
+bash /users/project/repo/kblock/deploy/1-prepare-blocks/deploy_1c_regions_crosswalk.sh
 bash /users/project/repo/kblock/deploy/2-centroid-buildings/deploy_2_prepare_buildings.sh
 bash /users/project/repo/kblock/deploy/3-model-population/deploy_3_model_population.sh
 bash /users/project/repo/kblock/deploy/4-compute-k/deploy_4_compute_k.sh
+bash /users/project/repo/kblock/deploy/5-combine-data/deploy_5_combine_data.sh
 ```
+
+#### Expected output from each job
+* `deploy_1a_prepare_gadm.sh` prepares the GADM delineations (cleaning the boundaries to align with coastlines and remove water features from land area.
+* `deploy_1b_generate_blocks.sh` generates the block level geometries from OSM street networks and natural features (and GADM boundaries as well).
+* `deploy_1c_regions_crosswalk.sh` aligns block geometries with GHSL and Africapolis urban boundaries
+* `deploy_2_prepare_buildings.sh` takes the Ecopia files and converts the building polygons to points and calculates building areas.
+* `deploy_3_model_population.sh` implements a dasymetric population model to estimate block level population using raster grids (LandScan and WorldPop) and building area.
+* `deploy_4_compute_k.sh` computes block complexity statistics (and other block level properties)
+* `deploy_5_combine_data.sh` combines data and computes additional block statistics
+
+#### Demo data
+Access sample data for Djibouti (DJI) [here](https://uchicago.box.com/s/qnj4waabhl5xori49wb1gwdhkt5t3iu8). Each step of DJI workflow should take less than 10 minutes each on a typical laptop. To run a minimal demo on test data use the following scripts in this order:
+* `/deploy_1b_generate_blocks_1.sh` creates block geometries using data in `osm` and `gadm` folders as data inputs 
+* `/deploy_3_model_population.sh` creates block level population estimates using data in `rasters`, `un`, `blocks`, and `buildings` folders as data inputs
+* `/deploy_4_compute_k.sbatch` creates block complexity statistics (and other block level properties) using `blocks`, `streets`, and `buildings` folders as data inputs
 
 ### Midway HPC deployment
 
@@ -137,12 +152,13 @@ source activate geospatial
 ```
 sbatch project2/<pi-cnetid>/projects/mnp/repos/kblock/deploy/1-prepare-blocks/deploy_1a_prepare_gadm.sbatch
 sbatch project2/<pi-cnetid>/projects/mnp/repos/kblock/deploy/1-prepare-blocks/deploy_1b_generate_blocks.sbatch
+sbatch project2/<pi-cnetid>/projects/mnp/repos/kblock/deploy/1-prepare-blocks/deploy_1c_regions_crosswalk.sbatch
 sbatch project2/<pi-cnetid>/projects/mnp/repos/kblock/deploy/2-centroid-buildings/deploy_2_prepare_buildings_bigmem.sbatch
 sbatch project2/<pi-cnetid>/projects/mnp/repos/kblock/deploy/2-centroid-buildings/deploy_2_prepare_buildings.sbatch
 sbatch project2/<pi-cnetid>/projects/mnp/repos/kblock/deploy/3-model-population/deploy_3_model_population.sbatch
 bash project2/<pi-cnetid>/projects/mnp/repos/kblock/deploy/4-compute-k/deploy_4_job_trigger.sh
+sbatch project2/<pi-cnetid>/projects/mnp/repos/kblock/deploy/5-combine-data/deploy_5_combine_data.sbatch
 ```
-
 
 ```
 cd /project2/bettencourt/mnp/update
@@ -153,6 +169,7 @@ bash /Users/nm/Desktop/kblock/deploy/1-prepare-blocks/deploy_1b_generate_blocks.
 bash /Users/nm/Desktop/kblock/deploy/2-centroid-buildings/deploy_2_prepare_buildings.sh
 bash /Users/nm/Desktop/kblock/deploy/3-model-population/deploy_3_model_population.sh
 bash /Users/nm/Desktop/kblock/deploy/4-compute-k/deploy_4_compute_k.sh
+bash /users/project/repo/kblock/deploy/5-combine-data/deploy_5_combine_data.sh
 ```
 
 ```
