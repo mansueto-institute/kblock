@@ -120,9 +120,10 @@ bash /users/project/repo/kblock/deploy/5-combine-data/deploy_5_combine_data.sh
 
 #### Demo data
 Access sample data for Djibouti (DJI) [here](https://uchicago.box.com/s/qnj4waabhl5xori49wb1gwdhkt5t3iu8). Each step of DJI workflow should take less than 10 minutes each on a typical laptop. To run a minimal demo on test data use the following scripts in this order:
+* `cd kblock/kblock` set current directory to Python files
 * `/deploy_1b_generate_blocks_1.sh` creates block geometries using data in `osm` and `gadm` folders as data inputs 
 * `/deploy_3_model_population.sh` creates block level population estimates using data in `rasters`, `un`, `blocks`, and `buildings` folders as data inputs
-* `/deploy_4_compute_k.sbatch` creates block complexity statistics (and other block level properties) using `blocks`, `streets`, and `buildings` folders as data inputs
+* `/deploy_4_compute_k.sh` creates block complexity statistics (and other block level properties) using `blocks`, `streets`, and `buildings` folders as data inputs
 
 ### Midway HPC deployment
 
