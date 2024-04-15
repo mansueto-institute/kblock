@@ -64,10 +64,6 @@ cd /users/project/kblock/deploy/0-ingest-data/
 bash deploy_download.sh -o users/project/inputs
 ```
 
-##### Download the Natural Earth Countries
-https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/10m/cultural/ne_10m_admin_0_countries.zip
-
-
 ##### Download [LandScan 2020 1 kilometer grid](https://landscan.ornl.gov/) from Oak Ridge National Laboratory
 `mkdir -p users/project/inputs/rasters/landscan` and add file `/landscan-global-2020.tif`
 ##### Download [WorldPop 2020 Constrained 100 meter grid](https://data.worldpop.org/GIS/Population/Global_2000_2020_Constrained/2020/maxar_v1/)
@@ -119,7 +115,7 @@ bash /users/project/repo/kblock/deploy/5-combine-data/deploy_5_combine_data.sh
 * `deploy_5_combine_data.sh` combines data and computes additional block statistics
 
 #### Demo data
-Access sample data for Djibouti (DJI) [here](https://uchicago.box.com/s/qnj4waabhl5xori49wb1gwdhkt5t3iu8). Each step of DJI workflow should take less than 10 minutes each on a typical laptop. To run a minimal demo on test data use the following scripts in this order:
+Access all data for Djibouti (DJI) is [here](https://uchicago.box.com/s/qnj4waabhl5xori49wb1gwdhkt5t3iu8) or use this smaller [minimal reproducible example subset](https://drive.google.com/drive/folders/1hVd4B2Dkl9lN8ZI6KV86BFPUnD7PlQDV?usp=drive_link). Each step of DJI workflow should take less than 10 minutes each on a typical laptop. To run a minimal demo on test data use the following scripts in this order:
 * `cd kblock/kblock` set current directory to Python files
 * `/deploy_1b_generate_blocks_1.sh` creates block geometries using data in `osm` and `gadm` folders as data inputs 
 * `/deploy_3_model_population.sh` creates block level population estimates using data in `rasters`, `un`, `blocks`, and `buildings` folders as data inputs
