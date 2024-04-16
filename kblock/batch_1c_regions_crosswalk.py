@@ -293,7 +293,8 @@ def main(log_file: Path, country_chunk: list, africapolis_file: Path, ghsl_file:
         full_xwalk = full_xwalk.merge(urban_country_name_labels, how = 'left', left_on=['urban_id'], right_on = ['urban_id'])
         full_xwalk = full_xwalk.merge(urban_country_code_labels, how = 'left', left_on=['urban_id'], right_on = ['urban_id'])
     
-        full_xwalk['conurbation_area_name_short'] = full_xwalk['conurbation_area_name'].str.split('-', n = 2, expand = True)[[0,1]].dropna().astype(str).apply('-'.join, 1)
+        try: full_xwalk['conurbation_area_name_short'] = full_xwalk['conurbation_area_name'].str.split('-', n = 2, expand = True)[[0,1]].dropna().astype(str).apply('-'.join, 1)
+        except: full_xwalk['conurbation_area_name_short'] = full_xwalk['conurbation_area_name']
         full_xwalk['conurbation_area_name_short'] = full_xwalk['conurbation_area_name_short'].fillna(full_xwalk['conurbation_area_name'])
         
         # Fill in for primary country fields

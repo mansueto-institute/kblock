@@ -4,23 +4,16 @@ Python tools for creating residential street block delineations, estimating popu
 
 ### Set up data and environment
 
-#### Clone repository
-```
-mkdir -p /users/project/repo
-cd /users/project/repo
-git clone git@github.com:mansueto-institute/kblock.git
-```
-
 #### Create conda environment
 ##### Build environment from scratch.
 ```
 conda update conda
 conda update -n base -c defaults conda
 
-conda env remove -n geospatial
-conda create --name geospatial python=3.9.7 --yes
+conda env remove -n kblock_env
+conda create --name kblock_env python=3.9.7 --yes
 
-source activate geospatial
+source activate kblock_env
 
 conda config --env --add channels conda-forge
 conda config --env --set channel_priority strict
@@ -39,12 +32,18 @@ conda install -c conda-forge pyogrio --yes
 conda install -c conda-forge ipykernel --yes
 ```
 
-##### Or install directly from conda yml.
+##### Or install environment directly from repo
 ```
-conda env update --name geospatial --file /users/project/repo/kblock/geospatial.yml
+mkdir -p /users/project/repo
+cd /users/project/repo
+git clone git@github.com:mansueto-institute/kblock.git
+cd /users/project/repo/kblock
+
+conda env create --name kblock_env --file geospatial.yml --force
+conda activate kblock_env
 ```
 
-#### Download data
+## Download data
 ```
 brew install wget
 mkdir -p /users/project/inputs
@@ -90,22 +89,9 @@ unzip temp.zip
 rm temp.zip
 ```
 
-### Local deployment
+## Local deployment
 
-#### Run each bash file serially from terminal.
-```
-cd /users/project/repo/kblock/kblock
-source activate geospatial
-bash /users/project/repo/kblock/deploy/1-prepare-blocks/deploy_1a_prepare_gadm.sh
-bash /users/project/repo/kblock/deploy/1-prepare-blocks/deploy_1b_generate_blocks.sh
-bash /users/project/repo/kblock/deploy/1-prepare-blocks/deploy_1c_regions_crosswalk.sh
-bash /users/project/repo/kblock/deploy/2-centroid-buildings/deploy_2_prepare_buildings.sh
-bash /users/project/repo/kblock/deploy/3-model-population/deploy_3_model_population.sh
-bash /users/project/repo/kblock/deploy/4-compute-k/deploy_4_compute_k.sh
-bash /users/project/repo/kblock/deploy/5-combine-data/deploy_5_combine_data.sh
-```
-
-#### Expected output from each job
+### Expected output from each job
 * `deploy_1a_prepare_gadm.sh` prepares the GADM delineations (cleaning the boundaries to align with coastlines and remove water features from land area.
 * `deploy_1b_generate_blocks.sh` generates the block level geometries from OSM street networks and natural features (and GADM boundaries as well).
 * `deploy_1c_regions_crosswalk.sh` aligns block geometries with GHSL and Africapolis urban boundaries
@@ -114,14 +100,66 @@ bash /users/project/repo/kblock/deploy/5-combine-data/deploy_5_combine_data.sh
 * `deploy_4_compute_k.sh` computes block complexity statistics (and other block level properties)
 * `deploy_5_combine_data.sh` combines data and computes additional block statistics
 
-#### Demo data
-Access all data for Djibouti (DJI) is [here](https://uchicago.box.com/s/qnj4waabhl5xori49wb1gwdhkt5t3iu8) or use this smaller [minimal reproducible example subset](https://drive.google.com/drive/folders/1hVd4B2Dkl9lN8ZI6KV86BFPUnD7PlQDV?usp=drive_link). Each step of DJI workflow should take less than 10 minutes each on a typical laptop. To run a minimal demo on test data use the following scripts in this order:
-* `cd kblock/kblock` set current directory to Python files
-* `/deploy_1b_generate_blocks_1.sh` creates block geometries using data in `osm` and `gadm` folders as data inputs 
-* `/deploy_3_model_population.sh` creates block level population estimates using data in `rasters`, `un`, `blocks`, and `buildings` folders as data inputs
-* `/deploy_4_compute_k.sh` creates block complexity statistics (and other block level properties) using `blocks`, `streets`, and `buildings` folders as data inputs
 
-### Midway HPC deployment
+### Minimal reproducible example
+#### Download data for Djibouti (DJI) [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing) and add to folder `/users/downloads/sample-data`
+
+#### Copy prepared buildings and prepared land polygons (allows us to skip data prep steps)
+```
+cd /users/downloads/sample-data
+cp -r _minreprex/gadm/parquet inputs-reprex/gadm
+cp -r _minreprex/buildings outputs-reprex
+```
+
+#### Clone repo and cd into it
+```
+cd /users/desktop
+git clone https://github.com/mansueto-institute/kblock.git
+```
+
+#### Install environment
+```
+cd /users/desktop/kblock
+conda env create --name kblock_env --file geospatial.yml --force
+conda activate kblock_env
+```
+
+#### Generate blocks, model population, compute block complexity
+```
+bash ./deploy/1-prepare-blocks/deploy_1b_generate_blocks.sh /users/downloads/sample-data
+bash ./deploy/3-model-population/deploy_3_model_population.sh /users/downloads/sample-data
+bash ./deploy/4-compute-k/deploy_4_compute_k.sh /users/downloads/sample-data
+```
+
+### Reproducible example with all steps
+#### Download data [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing) and add to folder `/users/downloads/sample-data`
+
+#### Clone repo and cd into it
+```
+cd /users/desktop
+git clone https://github.com/mansueto-institute/kblock.git
+```
+
+#### Install environment
+```
+cd /users/desktop/kblock
+conda env create --name kblock_env --file geospatial.yml --force
+conda activate kblock_env
+```
+
+#### Prepare land, generate blocks, create block crosswalk, prepare buildings, model population, compute block complexity, combine everything together
+```
+bash ./deploy/1-prepare-blocks/deploy_1a_prepare_gadm.sh /users/downloads/sample-data
+bash ./deploy/1-prepare-blocks/deploy_1b_generate_blocks.sh /users/downloads/sample-data
+bash ./deploy/1-prepare-blocks/deploy_1c_regions_crosswalk.sh /users/downloads/sample-data
+bash ./deploy/2-centroid-buildings/deploy_2_prepare_buildings.sh /users/downloads/sample-data
+bash ./deploy/3-model-population/deploy_3_model_population.sh /users/downloads/sample-data
+bash ./deploy/4-compute-k/deploy_4_compute_k.sh /users/downloads/sample-data
+bash ./deploy/5-combine-data/deploy_5_combine_data.sh /users/downloads/sample-data
+```
+
+
+## Midway HPC deployment
 
 #### Transfer files to HPC
 ```
