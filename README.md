@@ -102,7 +102,8 @@ rm temp.zip
 
 
 ### Minimal reproducible example
-#### Download data for Djibouti (DJI) [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing) and add to folder `/users/downloads/sample-data`
+#### Download data [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing) or [here](dsbprylw7ncuq.cloudfront.net/_sampledata/sample-data.zip)
+* Unzip `sample-data.zip` into `/users/downloads/sample-data`
 
 #### Copy prepared buildings and prepared land polygons (allows us to skip data prep steps)
 ```
@@ -131,8 +132,9 @@ bash ./deploy/3-model-population/deploy_3_model_population.sh /users/downloads/s
 bash ./deploy/4-compute-k/deploy_4_compute_k.sh /users/downloads/sample-data
 ```
 
-### Reproducible example with all steps
-#### Download data [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing) and add to folder `/users/downloads/sample-data`
+### Reproducible example including data prep
+#### Download data [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing) or [here](dsbprylw7ncuq.cloudfront.net/_sampledata/sample-data.zip)
+* Unzip `sample-data.zip` into `/users/downloads/sample-data`
 
 #### Clone repo and cd into it
 ```
