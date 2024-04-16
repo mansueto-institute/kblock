@@ -7,7 +7,6 @@ import momepy
 gpd.options.use_pygeos = True
 np.seterr(divide = 'ignore')
 
-import polars as pl
 import dask
 import dask.dataframe
 
