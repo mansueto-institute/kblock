@@ -160,7 +160,7 @@ conda env create --name kblock_env --file geospatial.yml --force
 conda activate kblock_env
 ```
 
-#### Prepare land, generate blocks, create block crosswalk, prepare buildings, model population, compute block complexity, combine everything together
+#### Prepare land, generate blocks, create block crosswalk, model population, compute block complexity, combine everything together
 ```
 bash ./deploy/1-prepare-blocks/deploy_1a_prepare_gadm.sh /users/downloads/sample-data
 bash ./deploy/1-prepare-blocks/deploy_1b_generate_blocks.sh /users/downloads/sample-data
