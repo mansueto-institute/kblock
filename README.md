@@ -136,6 +136,17 @@ bash ./deploy/4-compute-k/deploy_4_compute_k.sh /users/downloads/sample-data
 #### Download data [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing) or [here](dsbprylw7ncuq.cloudfront.net/_sampledata/sample-data.zip)
 * Unzip `sample-data.zip` into `/users/downloads/sample-data`
 
+#### Copy prepared buildings or run building prep script
+##### Option A: copy prepared buildings
+```
+cd /users/downloads/sample-data
+cp -r _minreprex/buildings outputs-reprex
+```
+##### Option B: run building prep script
+```
+bash ./deploy/2-centroid-buildings/deploy_2_prepare_buildings.sh /users/downloads/sample-data
+```
+
 #### Clone repo and cd into it
 ```
 cd /users/desktop
@@ -154,7 +165,6 @@ conda activate kblock_env
 bash ./deploy/1-prepare-blocks/deploy_1a_prepare_gadm.sh /users/downloads/sample-data
 bash ./deploy/1-prepare-blocks/deploy_1b_generate_blocks.sh /users/downloads/sample-data
 bash ./deploy/1-prepare-blocks/deploy_1c_regions_crosswalk.sh /users/downloads/sample-data
-bash ./deploy/2-centroid-buildings/deploy_2_prepare_buildings.sh /users/downloads/sample-data
 bash ./deploy/3-model-population/deploy_3_model_population.sh /users/downloads/sample-data
 bash ./deploy/4-compute-k/deploy_4_compute_k.sh /users/downloads/sample-data
 bash ./deploy/5-combine-data/deploy_5_combine_data.sh /users/downloads/sample-data
