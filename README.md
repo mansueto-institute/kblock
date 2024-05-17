@@ -102,14 +102,14 @@ rm temp.zip
 
 
 ### Minimal reproducible example
-#### Download data [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing) or [here](dsbprylw7ncuq.cloudfront.net/_sampledata/sample-data.zip)
+#### Download data [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing)
 * Unzip `sample-data.zip` into `/users/downloads/sample-data`
 
-#### Copy prepared buildings and prepared land polygons (allows us to skip data prep steps)
+#### Copy prepared buildings and prepared land polygons (this uses OSM buildings for demonstration purposes)
 ```
 cd /users/downloads/sample-data
 cp -r _minreprex/gadm/parquet inputs-reprex/gadm
-cp -r _minreprex/buildings outputs-reprex
+cp -r _minreprex/buildings/osm outputs-reprex
 ```
 
 #### Clone repo and cd into it
@@ -133,16 +133,16 @@ bash ./deploy/4-compute-k/deploy_4_compute_k.sh /users/downloads/sample-data
 ```
 
 ### Reproducible example including data prep
-#### Download data [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing) or [here](dsbprylw7ncuq.cloudfront.net/_sampledata/sample-data.zip)
+#### Download data [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing)
 * Unzip `sample-data.zip` into `/users/downloads/sample-data`
 
 #### Copy prepared buildings or run building prep script
-##### Option A: copy prepared buildings
+##### Option A: copy prepared buildings (this uses OSM buildings for demonstration purposes)
 ```
 cd /users/downloads/sample-data
-cp -r _minreprex/buildings outputs-reprex
+cp -r _minreprex/buildings/osm outputs-reprex
 ```
-##### Option B: run building prep script
+##### Option B: run building prep script (this replicates the process that uses Ecopia buildings)
 ```
 bash ./deploy/2-centroid-buildings/deploy_2_prepare_buildings.sh /users/downloads/sample-data
 ```
