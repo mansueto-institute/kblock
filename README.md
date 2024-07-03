@@ -102,7 +102,7 @@ rm temp.zip
 
 
 ### Minimal reproducible example
-#### Download data [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing)
+#### Download data [here](dsbprylw7ncuq.cloudfront.net/_sampledata/sample-data.zip) (recommended) (or [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing))
 * Unzip `sample-data.zip` into `/users/downloads/sample-data`
 
 #### Copy prepared buildings and prepared land polygons (this uses OSM buildings for demonstration purposes)
