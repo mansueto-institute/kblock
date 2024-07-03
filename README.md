@@ -2,7 +2,7 @@
 ## kblock
 Python tools for creating residential street block delineations, estimating population, and measuring access of buildings to street networks. See [https://www.millionneighborhoods.africa](https://www.millionneighborhoods.africa) for data and [https://github.com/mansueto-institute/kblock-analysis](https://github.com/mansueto-institute/kblock-analysis) for analysis.
 
-### Set up data and environment
+## Set up Python environment
 
 #### Create conda environment
 ##### Build environment from scratch.
