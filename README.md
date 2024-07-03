@@ -109,7 +109,7 @@ rm temp.zip
 ```
 cd /users/downloads/sample-data
 cp -r _minreprex/gadm/parquet inputs-reprex/gadm
-cp -r _minreprex/buildings/osm outputs-reprex
+cp -r _minreprex/buildings/osm outputs-reprex/buildings
 ```
 
 #### Clone repo and cd into it
@@ -132,44 +132,7 @@ bash ./deploy/3-model-population/deploy_3_model_population.sh /users/downloads/s
 bash ./deploy/4-compute-k/deploy_4_compute_k.sh /users/downloads/sample-data
 ```
 
-### Reproducible example including data prep
-#### Download data [here](dsbprylw7ncuq.cloudfront.net/_sampledata/sample-data.zip) (recommended) (or [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing))
-* Unzip `sample-data.zip` into `/users/downloads/sample-data`
-
-#### Copy prepared buildings or run building prep script
-##### Option A: copy prepared buildings (this uses OSM buildings for demonstration purposes)
-```
-cd /users/downloads/sample-data
-cp -r _minreprex/buildings/osm outputs-reprex
-```
-##### Option B: run building prep script (this replicates the process that uses Ecopia buildings)
-```
-bash ./deploy/2-centroid-buildings/deploy_2_prepare_buildings.sh /users/downloads/sample-data
-```
-
-#### Clone repo and cd into it
-```
-cd /users/desktop
-git clone https://github.com/mansueto-institute/kblock.git
-```
-
-#### Install environment
-```
-cd /users/desktop/kblock
-conda env create --name kblock_env --file geospatial.yml --force
-conda activate kblock_env
-```
-
-#### Prepare land, generate blocks, create block crosswalk, model population, compute block complexity, combine everything together
-```
-bash ./deploy/1-prepare-blocks/deploy_1a_prepare_gadm.sh /users/downloads/sample-data
-bash ./deploy/1-prepare-blocks/deploy_1b_generate_blocks.sh /users/downloads/sample-data
-bash ./deploy/1-prepare-blocks/deploy_1c_regions_crosswalk.sh /users/downloads/sample-data
-bash ./deploy/3-model-population/deploy_3_model_population.sh /users/downloads/sample-data
-bash ./deploy/4-compute-k/deploy_4_compute_k.sh /users/downloads/sample-data
-bash ./deploy/5-combine-data/deploy_5_combine_data.sh /users/downloads/sample-data
-```
-
+A more extended reprex with additional steps is available [here](https://gist.github.com/nmarchio/8dc8aa5736202da32cf02c4c2da0e85b).
 
 ## Midway HPC deployment
 
