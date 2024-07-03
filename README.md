@@ -133,7 +133,7 @@ bash ./deploy/4-compute-k/deploy_4_compute_k.sh /users/downloads/sample-data
 ```
 
 ### Reproducible example including data prep
-#### Download data [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing)
+#### Download data [here](dsbprylw7ncuq.cloudfront.net/_sampledata/sample-data.zip) (recommended) (or [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing))
 * Unzip `sample-data.zip` into `/users/downloads/sample-data`
 
 #### Copy prepared buildings or run building prep script
