@@ -102,7 +102,7 @@ rm temp.zip
 
 
 ### Minimal reproducible example
-#### Download data [here](https://dsbprylw7ncuq.cloudfront.net/_sampledata/sample-data.zip) (recommended) (or [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing))
+#### Download data [here](https://dsbprylw7ncuq.cloudfront.net/_sampledata/sample-data.zip) from S3 (recommended) (or [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing) for a Google Drive link)
 * Unzip `sample-data.zip` into `/users/downloads/sample-data`
 
 #### Copy prepared buildings and prepared land polygons (this uses OSM buildings for demonstration purposes)
@@ -125,7 +125,7 @@ conda env create --name kblock_env --file geospatial.yml --force
 conda activate kblock_env
 ```
 
-#### Generate blocks, model population, compute block complexity
+#### Generate blocks, model population, compute block complexity (see outputs-reprex directory for results using data for Djibouti)
 ```
 bash ./deploy/1-prepare-blocks/deploy_1b_generate_blocks.sh /users/downloads/sample-data
 bash ./deploy/3-model-population/deploy_3_model_population.sh /users/downloads/sample-data
