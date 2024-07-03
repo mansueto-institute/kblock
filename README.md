@@ -170,34 +170,3 @@ bash project2/<pi-cnetid>/projects/mnp/repos/kblock/deploy/4-compute-k/deploy_4_
 sbatch project2/<pi-cnetid>/projects/mnp/repos/kblock/deploy/5-combine-data/deploy_5_combine_data.sbatch
 ```
 
-```
-cd /project2/bettencourt/mnp/update
-cd /Users/nm/Desktop/kblock/kblock
-source activate geospatial
-bash /Users/nm/Desktop/kblock/deploy/1-prepare-blocks/deploy_1a_prepare_gadm.sh
-bash /Users/nm/Desktop/kblock/deploy/1-prepare-blocks/deploy_1b_generate_blocks.sh
-bash /Users/nm/Desktop/kblock/deploy/2-centroid-buildings/deploy_2_prepare_buildings.sh
-bash /Users/nm/Desktop/kblock/deploy/3-model-population/deploy_3_model_population.sh
-bash /Users/nm/Desktop/kblock/deploy/4-compute-k/deploy_4_compute_k.sh
-bash /users/project/repo/kblock/deploy/5-combine-data/deploy_5_combine_data.sh
-```
-
-```
-cd /project2/bettencourt/mnp/update/repo
-git clone git@github.com:mansueto-institute/kblock.git
-module load python/anaconda-2021.05
-source activate geospatial
-
-cd /project2/bettencourt/mnp/update/repo/kblock/kblock
-source activate geospatial
-
-sbatch project2/bettencourt/mnp/update/repo/kblock/deploy/1-prepare-blocks/deploy_1a_prepare_gadm.sbatch
-sbatch project2/bettencourt/mnp/update/repo/kblock/deploy/1-prepare-blocks/deploy_1b_generate_blocks.sbatch
-sbatch project2/bettencourt/mnp/update/repo/kblock/deploy/2-centroid-buildings/deploy_2_prepare_buildings_bigmem.sbatch
-sbatch project2/bettencourt/mnp/update/repo/kblock/deploy/2-centroid-buildings/deploy_2_prepare_buildings.sbatch
-sbatch project2/bettencourt/mnp/update/repo/kblock/deploy/3-model-population/deploy_3_model_population.sbatch
-bash project2/bettencourt/mnp/update/repo/kblock/deploy/4-compute-k/deploy_4_job_trigger.sh
-```
-
-
-
