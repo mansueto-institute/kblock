@@ -103,29 +103,29 @@ rm temp.zip
 
 ### Minimal reproducible example
 #### Download data [here](https://dsbprylw7ncuq.cloudfront.net/_sampledata/sample-data.zip) from S3 (recommended) (or [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing) for a Google Drive link)
-* Unzip `sample-data.zip` into `/users/downloads/sample-data`
+* Unzip `sample-data.zip` into a directory of your choosing. In this example we use `/users/downloads/sample-data` so be sure to modify that path in the below example code.
 
-#### Copy prepared buildings and prepared land polygons (this uses OSM buildings for demonstration purposes)
+#### Copy prepared buildings and prepared land polygons into preset directories in the sample-data folder. The example uses OSM buildings for demonstration purposes (rather than Ecopia).
 ```
 cd /users/downloads/sample-data
 cp -r _minreprex/gadm/parquet inputs-reprex/gadm
 cp -r _minreprex/buildings/osm outputs-reprex/buildings
 ```
 
-#### Clone repo and cd into it
+#### Clone repo and cd into it.
 ```
 cd /users/desktop
 git clone https://github.com/mansueto-institute/kblock.git
 ```
 
-#### Install and activate conda environment (assumes Python is installed on machine)
+#### Install and activate conda environment (assumes Python is installed on machine). The below environment was tested on MacOS or Linux systems.
 ```
 cd /users/desktop/kblock
 conda env create --name kblock_env --file geospatial.yml --force
 conda activate kblock_env
 ```
 
-#### Generate blocks, model population, compute block complexity (see outputs-reprex directory for results using data for Djibouti)
+#### Generate blocks, model population, compute block complexity (see outputs-reprex directory for results using data for Djibouti).
 ```
 bash ./deploy/1-prepare-blocks/deploy_1b_generate_blocks.sh /users/downloads/sample-data
 bash ./deploy/3-model-population/deploy_3_model_population.sh /users/downloads/sample-data
