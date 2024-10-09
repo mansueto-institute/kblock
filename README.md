@@ -118,7 +118,7 @@ cd /users/desktop
 git clone https://github.com/mansueto-institute/kblock.git
 ```
 
-#### Install and activate conda environment (assumes Python is installed on machine). The below environment was tested on MacOS or Linux systems.
+#### Install and activate conda environment (assumes Python is installed on machine). The below environment was tested on MacOS or Linux systems. Windows users may have better luck using the environment available in this [gist](https://gist.github.com/nmarchio/e9f04b4716c711a474bd26e56bc3bc97).
 ```
 cd /users/desktop/kblock
 conda env create --name kblock_env --file geospatial.yml --force
