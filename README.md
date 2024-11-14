@@ -77,7 +77,7 @@ for c in ${iso_list[@]}; do
 	wget -O $outpath/${c}.tif https://data.worldpop.org/GIS/Population/Global_2000_2020_Constrained/2020/maxar_v1/${c}/${d}_ppp_2020_UNadj_constrained.tif
 done
 ```
-##### Download [Ecopia Landbase Africa powered by Maxar](https://platform.ecopiatech.com/login) (requires gaining access to DigitizeAfrica and manually downloading files)
+##### Download [Ecopia Landbase Africa powered by Maxar](https://platform.ecopiatech.com/login) (requires gaining access to DigitizeAfrica and manually downloading files - email admin at digitizeafrica.ai to obtain credentials for the DigitizeAfrica Platform)
 ```
 mkdir -p users/project/inputs/ecopia
 ```
