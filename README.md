@@ -32,18 +32,18 @@ conda install -c conda-forge pyogrio --yes
 conda install -c conda-forge ipykernel --yes
 ```
 
-##### Or install environment directly from repo
+##### Or install environment directly from repo (change /users/project/repo to your local directory path)
 ```
 mkdir -p /users/project/repo
 cd /users/project/repo
 git clone git@github.com:mansueto-institute/kblock.git
 cd /users/project/repo/kblock
 
-conda env create --name kblock_env --file geospatial.yml --force
+conda env create --name kblock_env --file environment.yml
 conda activate kblock_env
 ```
 
-## Download data
+## How to download source data (change /users/project/inputs to your local directory path)
 ```
 brew install wget
 mkdir -p /users/project/inputs
@@ -105,14 +105,14 @@ rm temp.zip
 #### Download data [here](https://dsbprylw7ncuq.cloudfront.net/_sampledata/sample-data.zip) from S3 (recommended) (or [here](https://drive.google.com/drive/folders/1Cs9RK01hltsw9ZK-y3dDU_5LXclXNx0K?usp=sharing) for a Google Drive link)
 * Unzip `sample-data.zip` into a directory of your choosing. In this example we use `/users/downloads/sample-data` so be sure to modify that path in the below example code.
 
-#### Copy prepared buildings and prepared land polygons into preset directories in the sample-data folder. The example uses OSM buildings for demonstration purposes (rather than Ecopia).
+#### Copy prepared buildings and prepared land polygons into preset directories in the sample-data folder. The example uses OSM buildings for demonstration purposes (rather than Ecopia). Make sure to change /users/downloads/sample-data to your local directory path.
 ```
 cd /users/downloads/sample-data
 cp -r _minreprex/gadm/parquet inputs-reprex/gadm
 cp -r _minreprex/buildings/osm outputs-reprex/buildings
 ```
 
-#### Clone repo and cd into it.
+#### Clone repo and cd into the repo. Make sure to change /users/desktop to your local directory path.
 ```
 cd /users/desktop
 git clone https://github.com/mansueto-institute/kblock.git
@@ -121,11 +121,11 @@ git clone https://github.com/mansueto-institute/kblock.git
 #### Install and activate conda environment (assumes Python is installed on machine). The below environment was tested on MacOS or Linux systems. Windows users may have better luck using the environment available in this [gist](https://gist.github.com/nmarchio/e9f04b4716c711a474bd26e56bc3bc97).
 ```
 cd /users/desktop/kblock
-conda env create --name kblock_env --file geospatial.yml --force
+conda env create --name kblock_env --file environment.yml
 conda activate kblock_env
 ```
 
-#### Generate blocks, model population, compute block complexity (see outputs-reprex directory for results using data for Djibouti).
+#### Generate blocks, model population, compute block complexity (see outputs-reprex directory for results using data for Djibouti). Make sure to change /users/downloads/sample-data to your local directory path.
 ```
 bash ./deploy/1-prepare-blocks/deploy_1b_generate_blocks.sh /users/downloads/sample-data
 bash ./deploy/3-model-population/deploy_3_model_population.sh /users/downloads/sample-data
