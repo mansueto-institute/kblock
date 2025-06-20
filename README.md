@@ -1,6 +1,6 @@
 
 ## kblock
-Python tools for creating residential street block delineations, estimating population, and measuring access of buildings to street networks. See [https://www.millionneighborhoods.africa](https://www.millionneighborhoods.africa) for data and [https://github.com/mansueto-institute/kblock-analysis](https://github.com/mansueto-institute/kblock-analysis) for analysis.
+Python tools for creating residential street block delineations, estimating population, and measuring access of buildings to street networks. See [https://www.millionneighborhoods.africa](https://www.millionneighborhoods.africa) for data and [https://github.com/mansueto-institute/kblock-analysis](https://github.com/mansueto-institute/kblock-analysis) for analysis. DOI-minted repo is available at [https://zenodo.org/records/12636819](https://zenodo.org/records/12636819). Data is also available at [https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/DQY54U](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/DQY54U).
 
 ## Set up Python environment
 
